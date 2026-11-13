@@ -139,6 +139,8 @@ button:active, a:active { transform: scale(.98); }
   font-size: 13px; font-weight: 800; color: #fff;
   background: hsl(var(--h) 55% 52%); object-fit: cover;
 }
+/* 두 글자 이름은 조금 작게 */
+.avatar > small { font-size: .8em; letter-spacing: -.04em; }
 .avatar.xs { width: 22px; height: 22px; font-size: 10px; }
 .avatar.sm { width: 28px; height: 28px; font-size: 11px; }
 .avatar.lg { width: 52px; height: 52px; font-size: 22px; }
@@ -397,8 +399,9 @@ textarea { resize: none; }
 #toast {
   position: fixed; left: 50%; bottom: calc(160px + env(safe-area-inset-bottom)); z-index: 100;
   transform: translate(-50%, 16px); opacity: 0; pointer-events: none; transition: .22s;
-  max-width: calc(100% - 32px); padding: 11px 18px; border-radius: 99px;
+  max-width: calc(100% - 32px); padding: 11px 18px; border-radius: 20px;
   background: var(--ink); color: var(--bg); font-size: 14px; font-weight: 700; text-align: center;
+  white-space: pre-line; line-height: 1.45;  /* 문구 속 \n에서 줄을 바꿔요 */
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 

@@ -205,12 +205,21 @@ function live(uid) {
   return people[uid];
 }
 
+// 사진이 없을 때 동그라미에 넣는 글자: 한글 이름은 성을 빼고 두 글자(박가빈 → 가빈), 영어 이름은 머리글자 두 개(Gabin Park → GP)
+function avatarText(name) {
+  const chars = [...name.trim()];
+  if (/^[가-힣]+$/.test(name.trim())) return chars.length >= 3 ? chars.slice(-2).join('') : chars.join('');
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[1][0] : chars.slice(0, 2).join('')).toUpperCase();
+}
+
 function avatarOf(info, uid, cls = '') {
   const p = { ...info, ...live(uid) };
   const name = p.name || '?';
   if (p.photo && p.showPhoto !== false) return `<img class="avatar ${cls}" src="${esc(p.photo)}" alt="${esc(name)}" referrerpolicy="no-referrer">`;
   const bg = p.color ? `background:${esc(p.color)}` : `--h:${hue(uid)}`;
-  return `<span class="avatar ${cls}" style="${bg}" title="${esc(name)}">${esc([...name][0])}</span>`;
+  const text = avatarText(name) || '?';
+  return `<span class="avatar ${cls}" style="${bg}" title="${esc(name)}">${[...text].length > 1 ? `<small>${esc(text)}</small>` : esc(text)}</span>`;
 }
 const avatar = (uid, cls) => avatarOf(state.trip?.memberInfo?.[uid], uid, cls);
 
@@ -2415,7 +2424,7 @@ const actions = {
       '',
       mixed && fxRates ? `${fxWhen()} 환율 기준 · 가치가` : '가치가',
     ].join('\n');
-    copyText(text, '정산 내용을 복사했어요. 카톡에 붙여넣어 보내세요.');
+    copyText(text, '정산 내용을 복사했어요.\n카톡에 붙여넣어 보내세요');
   },
   'set-currency': d => {
     if (d.id === currency()) return closeSheet();
