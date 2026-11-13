@@ -1,5 +1,7 @@
 import { store, isDemo } from './store.js';
 import { airportByCode, searchAirports, guessAirport, cityOfCode } from './airports.js';
+import { searchStops, stopCity } from './stations.js';
+import { tripScene } from './scenes.js';
 
 const KINDS = ['events', 'places', 'expenses'];
 // 장소 종류: 지도 핀·카드에 같은 색과 선 아이콘(ICONS의 cat_*)을 써요
@@ -49,7 +51,8 @@ const HANDLE_RE = /^[a-z0-9_.]{3,20}$/;
 const ICONS = {
   m_plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   m_car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
-  m_transit: '<path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15-1-1"/><path d="m15 15 1-1"/><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"/><path d="m8 19-2 3"/><path d="m16 19 2 3"/>',
+  m_bus: '<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/>',
+  m_train: '<path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15-1-1"/><path d="m15 15 1-1"/><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"/><path d="m8 19-2 3"/><path d="m16 19 2 3"/>',
   cat_food: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
   cat_cafe: '<path d="M10 2v2"/><path d="M14 2v2"/><path d="M6 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>',
   cat_sight: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
@@ -632,8 +635,8 @@ const stayLabel = t => {
 // 출발 → 도착. 출발은 사용자가 정한 공항만, 도착을 안 정했으면 여행 이름에 든 도시로 짐작합니다("시애틀 먹방" → SEA).
 function tripRoute(t) {
   if (modeOf(t) !== 'plane') {
-    const to = t.to || cityOfCode(guessAirport(t.name)?.code) || '';
-    return { from: t.from || '', to, fromCity: t.from || '', toCity: to };
+    const mode = modeOf(t), to = t.to || cityOfCode(guessAirport(t.name)?.code) || '';
+    return { from: t.from || '', to, fromCity: stopCity(mode, t.from || ''), toCity: stopCity(mode, to) };
   }
   const from = t.from || '';
   const to = t.to || guessAirport(t.name)?.code || '';
@@ -686,8 +689,7 @@ function passStamp(t, s) {
 // --- 이동수단별 티켓 ---
 // 비행기는 탑승권, 나머지는 그 수단에서 실제로 보는 표·물건 모양으로 그려요.
 // mode가 없는 예전 여행은 모두 비행기예요.
-const MODES = { plane: '비행기', car: '자동차', train: '기차', subway: '전철', bus: '버스' };
-const TRANSIT = ['train', 'subway', 'bus'];
+const MODES = { plane: '비행기', train: '기차', bus: '고속버스', car: '자동차' };
 const modeOf = t => MODES[t?.mode] ? t.mode : 'plane';
 const dotDate = s => { const d = parseDate(s); return `${d.getMonth() + 1}.${d.getDate()}`; };
 const tripDates = t => !t.startDate ? '날짜 미정' : !t.endDate || t.endDate === t.startDate ? dotDate(t.startDate) : `${dotDate(t.startDate)}–${dotDate(t.endDate)}`;
@@ -749,12 +751,6 @@ function modeCard(t, { heading = false, last }) {
         <div><small>${last[0]}</small>${last[1]}</div>
         <div><small>STATUS</small><b>${dday}</b></div>
       </div>
-    </div>`;
-    case 'subway': return `
-    <div class="mc stn">
-      <div class="stn-top">${name('stn-name')}<span class="stn-dd">${dday}</span></div>
-      <div class="stn-bar"><span class="stn-from"><small>출발</small>← ${from}</span><span class="stn-pill">${to}</span></div>
-      <div class="stn-foot"><span>${tripDates(t)}</span>${last[1]}</div>
     </div>`;
     case 'bus': return `
     <div class="mc led">
@@ -891,7 +887,8 @@ function viewTrip() {
         </button>
         ${owner ? `<button class="crew-add" data-action="members">${icon('userPlus', 16)} 멤버 추가</button>` : ''}`;
   return `
-  <header class="hero trip-hero">
+  <header class="hero trip-hero scene-${modeOf(t)}">
+    ${tripScene(modeOf(t), t.startDate)}
     <div class="hero-bar">
       <a class="hero-icon" href="#/" aria-label="뒤로">${icon('back', 22)}</a>
       <span class="hero-chip">${s.label}</span>
@@ -1733,28 +1730,44 @@ function searchAirportField(box) {
 
 const field = (label, input) => `<label class="field"><span>${label}</span>${input}</label>`;
 
-// 여행 창의 "이동수단": 비행기 · 자동차 · 대중교통(기차 · 전철 · 버스). 고른 수단에 맞춰 출발·도착 칸이 바뀌어요.
-const ROUTE_HINT = {
-  car: ['서울', '강릉'], train: ['서울역', '부산역'], subway: ['홍대입구', '성수'], bus: ['서울 고속터미널', '전주'],
+// 여행 창의 "이동수단": 비행기 · 기차 · 고속버스 · 자동차. 고른 수단에 맞춰 출발·도착 칸이 바뀌어요.
+// 비행기는 공항, 기차는 역, 고속버스는 터미널을 검색해서 고르고, 자동차는 직접 적어요.
+const STOP_FIELD = {
+  train: ['출발역', '도착역', '역 이름 (서울, 부산, 강릉)', '기차역 이름으로 찾을 수 있어요.'],
+  bus: ['출발 터미널', '도착 터미널', '터미널이나 도시 이름', '터미널이나 도시 이름으로 찾을 수 있어요.'],
 };
+const stopField = (kind, name, label, value) => `
+  <div class="field ap-field stop-field" data-kind="${kind}">
+    <span>${label}</span>
+    <div class="ap-box">${icon('search', 16)}<input class="stop-q" name="${name}" maxlength="20" placeholder="${STOP_FIELD[kind][2]}" autocomplete="off" spellcheck="false" value="${esc(value)}"></div>
+    <div class="ap-results"></div>
+  </div>`;
+function searchStopField(box) {
+  const kind = box.dataset.kind, q = box.querySelector('.stop-q').value;
+  box.querySelector('.ap-results').innerHTML = searchStops(kind, q).map(s => `
+    <button type="button" class="ap-item stop-item" data-action="stop-pick" data-name="${esc(s.name)}">${icon(kind === 'train' ? 'm_train' : 'm_bus', 18)}<span><b>${esc(s.name)}</b> ${esc(s.full)}<small>${esc(s.city)}</small></span></button>`).join('')
+    || (q.trim() ? '<p class="search-msg">목록에 없는 곳이면 이름을 그대로 적어도 돼요.</p>' : '');
+}
 function routeBlock(mode, t) {
   const same = t && modeOf(t) === mode;
-  const group = TRANSIT.includes(mode) ? 'transit' : mode;
-  const btn = (g, label, ic) => `<button type="button" class="mode-btn${group === g ? ' on' : ''}" data-action="pick-mode" data-mode="${g === 'transit' ? (TRANSIT.includes(mode) ? mode : 'train') : g}">${icon(ic, 22)}${label}</button>`;
+  const btn = (m, ic) => `<button type="button" class="mode-btn${mode === m ? ' on' : ''}" data-action="pick-mode" data-mode="${m}">${icon(ic, 22)}${MODES[m]}</button>`;
   const fields = mode === 'plane' ? `
     ${airportField('from', '출발 공항', same ? t.from || '' : '')}
     ${airportField('to', '도착 공항', same && t.to ? t.to : guessAirport(t?.name)?.code || '', same && t.to ? '' : 'auto')}
-    <p class="muted xsmall">탑승권에 보여요. 도시나 공항 이름(시애틀, 하네다, seattle)이나 코드(SEA)로 찾을 수 있어요. 도착을 비워 두면 여행 이름에 든 도시로 채워요.</p>` : `
+    <p class="muted xsmall">탑승권에 보여요. 도시나 공항 이름(시애틀, 하네다, seattle)이나 코드(SEA)로 찾을 수 있어요. 도착을 비워 두면 여행 이름에 든 도시로 채워요.</p>`
+  : mode === 'car' ? `
     <div class="row">
-      ${field('출발지', `<input name="from" maxlength="20" placeholder="${ROUTE_HINT[mode][0]}" value="${esc(same ? t.from : '')}">`)}
-      ${field('도착지', `<input name="to" maxlength="20" placeholder="${ROUTE_HINT[mode][1]}" value="${esc(same ? t.to : '')}">`)}
+      ${field('출발지', `<input name="from" maxlength="20" placeholder="서울" value="${esc(same ? t.from : '')}">`)}
+      ${field('도착지', `<input name="to" maxlength="20" placeholder="강릉" value="${esc(same ? t.to : '')}">`)}
     </div>
-    <p class="muted xsmall">${MODES[mode]} 티켓에 보여요. 도착지는 날씨를 찾을 때도 써요.</p>`;
+    <p class="muted xsmall">표지판에 보여요. 도착지는 날씨를 찾을 때도 써요.</p>` : `
+    ${stopField(mode, 'from', STOP_FIELD[mode][0], same ? t.from || '' : '')}
+    ${stopField(mode, 'to', STOP_FIELD[mode][1], same ? t.to || '' : '')}
+    <p class="muted xsmall">${STOP_FIELD[mode][3]} 목록에 없는 곳은 그대로 적어도 돼요.</p>`;
   return `
     <input type="hidden" name="mode" value="${mode}">
     <div class="field"><span>이동수단</span>
-      <div class="mode-pick">${btn('plane', '비행기', 'm_plane')}${btn('car', '자동차', 'm_car')}${btn('transit', '대중교통', 'm_transit')}</div>
-      ${group === 'transit' ? `<div class="mode-sub">${TRANSIT.map(m => `<button type="button" class="chip${m === mode ? ' on' : ''}" data-action="pick-mode" data-mode="${m}">${MODES[m]}</button>`).join('')}</div>` : ''}
+      <div class="mode-pick">${btn('plane', 'm_plane')}${btn('train', 'm_train')}${btn('bus', 'm_bus')}${btn('car', 'm_car')}</div>
     </div>
     ${fields}`;
 }
@@ -2505,12 +2518,22 @@ const actions = {
   'place-detail': d => placeDetail(d.id),
   'geo-search': (d, el) => searchPlaceLocation(el.form),
   'ap-pick': (d, el) => setAirport(el.closest('.ap-field'), d.code),
+  'stop-pick': (d, el) => {
+    const box = el.closest('.stop-field');
+    box.querySelector('.stop-q').value = d.name;
+    box.querySelector('.ap-results').innerHTML = '';
+  },
   'pick-mode': (d, el) => {
     const block = el.closest('.route-block');
-    // 자동차 ↔ 대중교통처럼 둘 다 글자로 적는 칸이면 적어 둔 출발·도착을 그대로 옮겨요.
-    const typed = block.querySelector('input[name=from]:not([type=hidden])') && [block.querySelector('[name=from]').value, block.querySelector('[name=to]').value];
+    // 글자로 적는 칸끼리 바꾸면 적어 둔 출발·도착을 옮겨요. 기차역을 고속버스 터미널로 옮기는 것처럼
+    // 새 목록에 없는 이름이 되면 옮기지 않아요(자동차는 아무 이름이나 괜찮아요).
+    const was = block.querySelector('[name=mode]').value;
+    const typed = block.querySelector('input[name=from]:not([type=hidden])') && ['from', 'to'].map(n => block.querySelector(`[name=${n}]`).value);
     block.innerHTML = routeBlock(d.mode, state.trips.find(x => x.id === block.dataset.trip));
-    if (typed && d.mode !== 'plane') [block.querySelector('[name=from]').value, block.querySelector('[name=to]').value] = typed;
+    if (!typed || d.mode === 'plane') return;
+    ['from', 'to'].forEach((n, i) => {
+      if (was === 'car' || d.mode === 'car' || searchStops(d.mode, typed[i])[0]?.name === typed[i]) block.querySelector(`[name=${n}]`).value = typed[i];
+    });
   },
   'geo-pick': (d, el) => {
     const r = geoResults[+d.id];
@@ -2768,6 +2791,7 @@ document.addEventListener('focusin', e => {
 document.addEventListener('input', e => {
   const box = e.target.closest('#sheet-root .ap-field');
   if (box && e.target.classList.contains('ap-q')) return searchAirportField(box);
+  if (box && e.target.classList.contains('stop-q')) return searchStopField(box);
   const form = e.target.form;
   if (e.target.name !== 'name' || !form?.querySelector('.ap-field[data-mode=auto]')) return;
   const toBox = form.to.closest('.ap-field');

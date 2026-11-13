@@ -265,19 +265,7 @@ button:active, a:active { transform: scale(.98); }
 .flap-grid b { font: 700 14px/1.2 'Courier Prime', monospace; color: #f6c945; white-space: nowrap; }
 .flap-grid .mc-stay { font-family: var(--body); color: #f6f1e1; }
 
-/* 전철: 승강장 역 이름판(가운데가 도착역) */
-.stn { padding: 14px 0 12px; border-radius: 14px; background: #fbfbf8; box-shadow: var(--card-shadow), inset 0 0 0 1px #e2e2dc; overflow: hidden; color: #2a2a2a; }
-.stn-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 16px; }
-.stn-name { min-width: 0; font: 700 17px/1.2 var(--display) !important; }
-.stn-dd { flex: none; font: 700 12px 'Courier Prime', monospace; color: #2e9e5b; }
-.stn-bar { position: relative; height: 32px; margin: 16px 0 10px; display: flex; align-items: center; padding: 0 14px; background: #2e9e5b; color: #fff; font-size: 13px; font-weight: 700; }
-.stn-from { max-width: 22%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.1; }
-.stn-from small { display: block; font-size: 10px; opacity: .85; }
-.stn-pill { position: absolute; left: 50%; top: 50%; max-width: 54%; transform: translate(-50%, -50%); padding: 6px 24px; border: 4px solid #2e9e5b; border-radius: 99px; background: #fff; color: #222; font-size: 24px; font-weight: 800; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
-.stn-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; font: 700 12px 'Courier Prime', monospace; color: #666; }
-.stn-foot .mc-stay { font-family: var(--body); color: #2a2a2a; }
-
-/* 버스: 앞유리 행선지 전광판(아랫줄이 흘러가요) */
+/* 고속버스: 앞유리 행선지 전광판(아랫줄이 흘러가요) */
 .led { padding: 10px; border-radius: 16px; background: #2b2d31; box-shadow: var(--card-shadow); }
 .led-screen { position: relative; padding: 12px 14px; border-radius: 6px; background: #0c0c0c; color: #ff9d2e; text-shadow: 0 0 8px rgba(255, 157, 46, .6); overflow: hidden; }
 .led-screen::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle, transparent 55%, rgba(12, 12, 12, .55) 75%) 0 0 / 3px 3px; pointer-events: none; }
@@ -305,14 +293,21 @@ button:active, a:active { transform: scale(.98); }
 
 /* 여행 화면 위쪽: 비행기가 아닌 여행 */
 .trip-mode { margin-top: 14px; }
+/* 여행 화면 배경: 이동수단·계절 풍경 (scenes.js). 그림 아래쪽이 헤더 아래에 맞춰 붙고, 끝은 앱 배경색으로 흐려져요 */
+.trip-hero { isolation: isolate; }
+.trip-hero:not(.scene-plane) { padding-bottom: 96px; }
+.trip-scene { position: absolute; z-index: -1; left: 0; right: 0; top: 0; bottom: 0; overflow: hidden; pointer-events: none; }
+.trip-scene svg { position: absolute; left: 0; bottom: 0; width: 100%; height: auto; overflow: visible; }
+.trip-scene:not(.plane)::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 36px; background: linear-gradient(rgba(241, 245, 250, 0), var(--bg)); }
+.trip-scene.plane { bottom: auto; height: 240px; }
+.trip-scene.plane svg { top: 0; bottom: auto; }
 .trip-mode-crew { margin-top: 10px; }
 
 /* 여행 창: 이동수단 */
-.mode-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.mode-btn { display: grid; justify-items: center; gap: 4px; padding: 10px 0 8px; border: 0; border-radius: 12px; background: var(--bg); color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.mode-pick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.stop-item > .ic { flex-shrink: 0; color: var(--primary-deep); }
+.mode-btn { display: grid; justify-items: center; gap: 4px; padding: 10px 0 8px; white-space: nowrap; border: 0; border-radius: 12px; background: var(--bg); color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .mode-btn.on { background: var(--ink); color: #fff; }
-.mode-sub { display: flex; gap: 6px; margin-top: 8px; }
-.mode-sub .chip { border: 0; font: inherit; font-size: 13px; font-weight: 700; }
 
 .code-input { font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; }
 
