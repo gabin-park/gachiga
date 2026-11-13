@@ -275,13 +275,15 @@ button:active, a:active { transform: scale(.98); }
 .stop-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .stop-meta.note { white-space: pre-wrap; }
 .stop-meta.note { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); } /* 메모는 점선 아래 따로 */
-.stop .avatar { position: absolute; right: 12px; top: 12px; }
+/* 프로필과 길찾기 버튼은 카드 오른쪽에 나란히, 세로 가운데에 둬요 */
+.stop .avatar { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
 .stop .avatar { pointer-events: none; }
-.stop-go { position: absolute; right: 12px; bottom: 12px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #e8f0fe; color: #1a73e8; }
+.stop.has-go .avatar { right: 48px; }
+.stop.has-go .stop-card { padding-right: 86px; }
+.stop-go { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #e8f0fe; color: #1a73e8; }
 /* 보이는 크기는 프로필과 같게, 손가락으로 누르는 범위는 넓게 */
 .stop-go::before { content: ''; position: absolute; inset: -8px; }
 .stop-go .ic { fill: currentColor; }
-.stop.has-go .stop-card { min-height: 88px; } /* 짧은 카드에서도 프로필과 길찾기 버튼이 겹치지 않게 */
 .add-inline { display: block; width: 100%; padding: 10px; text-align: center; color: var(--muted); font-size: 14px; font-weight: 600; border: 1.5px dashed var(--line); border-radius: 16px; }
 
 /* ---------- 장소: 엽서 ---------- */
