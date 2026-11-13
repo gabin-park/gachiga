@@ -34,7 +34,7 @@
 - **AI 장소 분석**: Cloudflare Workers + Workers AI (Llama 3.3 70B)로 인스타 본문에서 장소를 추출
 - **지도**: MapLibre GL + OpenFreeMap 타일 (한국어 지명 우선 표시)
 - **검색·경로**: Photon / Nominatim (장소 검색), OSRM (routing.openstreetmap.de, 동선)
-- **데이터**: Open-Meteo (날씨), Coinbase / open.er-api (환율, 실시간 · 캐시)
+- **데이터**: Open-Meteo (날씨 · 도시 위치), Coinbase / open.er-api (환율, 실시간 · 캐시)
 
 ## 구조
 
@@ -46,7 +46,7 @@ public/
   store-firebase.js   Firestore 실시간 구독, Google 로그인
   store-local.js      데모 모드 저장소 (localStorage, 탭 간 동기화)
   styles.css          디자인 (종이 질감 탑승권 · 엽서 · 영수증 테마)
-  airports.js         공항 코드 · 도시 목록
+  airports.js         공항 코드 · 도시 · 좌표 목록 (날씨 위치)
 worker/
   src/index.js        인스타·구글맵 링크 분석 서버 (Cloudflare Workers)
 firestore.rules       보안 규칙

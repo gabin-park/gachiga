@@ -1,4 +1,4 @@
-# 같이가 인스타 분석 서버 (Cloudflare Workers 무료 요금제)
+# 가치가 인스타 분석 서버 (Cloudflare Workers 무료 요금제)
 # 올리기: cd worker && npx wrangler deploy
 name = "gachiga-ig"
 main = "src/index.js"

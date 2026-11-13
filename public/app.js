@@ -1,5 +1,5 @@
 import { store, isDemo } from './store.js';
-import { airportByCode, searchAirports, guessAirport, cityOfCode } from './airports.js';
+import { airportByCode, searchAirports, guessAirport, cityOfCode, airportCoords } from './airports.js';
 
 const KINDS = ['events', 'places', 'expenses'];
 // 장소 종류: 지도 핀·카드에 같은 색과 선 아이콘(ICONS의 cat_*)을 써요
@@ -1165,7 +1165,7 @@ async function geocode(q, near) {
   return geocodeOnce(spaced, near);
 }
 
-// 여행지 한가운데: 이미 꽂힌 핀이 가장 많이 모인 곳. 핀이 없으면 도착 도시를 한 번 찾아 기억해 둬요.
+// 여행지 한가운데: 이미 꽂힌 핀이 가장 많이 모인 곳. 핀이 없으면 도착 공항 좌표, 목록에 없는 공항이면 도시를 한 번 찾아 기억해 둬요.
 let cityCenters = null;
 async function tripCenter() {
   const pins = [...state.places, ...state.events].filter(hasCoords).map(p => ({ lat: +p.lat, lng: +p.lng }));
@@ -1174,14 +1174,20 @@ async function tripCenter() {
     const near = pins.filter(q => kmBetween(hub, q) < 50);
     return { lat: near.reduce((s, p) => s + p.lat, 0) / near.length, lng: near.reduce((s, p) => s + p.lng, 0) / near.length };
   }
-  const city = cityOfCode(tripRoute(state.trip || {}).to);
+  const to = tripRoute(state.trip || {}).to;
+  const atAirport = airportCoords(to); // 목록에 있는 공항이면 공항 좌표를 그대로 써요
+  if (atAirport) return atAirport;
+  const city = cityOfCode(to);
   if (!city) return null;
-  try { cityCenters ||= JSON.parse(localStorage.getItem('gachiga-city-centers') || '{}'); } catch { cityCenters = {}; }
+  // 예전 기억(v1)에는 '도쿄' → 서울의 식당처럼 엉뚱한 곳이 섞여 있어서 새 이름으로 다시 찾아요
+  try { cityCenters ||= JSON.parse(localStorage.getItem('gachiga-city-centers-v2') || '{}'); } catch { cityCenters = {}; }
   if (!cityCenters[city]) {
-    const [c] = await geocodeOnce(city).catch(() => []);
+    // 도시 이름 전용 검색(Open-Meteo, 무료)이라 가게 이름에 걸리지 않아요
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=ko&name=${encodeURIComponent(city)}`).catch(() => null);
+    const [c] = (res?.ok && (await res.json()).results) || [];
     if (!c) return null;
-    cityCenters[city] = { lat: c.lat, lng: c.lng };
-    try { localStorage.setItem('gachiga-city-centers', JSON.stringify(cityCenters)); } catch {}
+    cityCenters[city] = { lat: c.latitude, lng: c.longitude };
+    try { localStorage.setItem('gachiga-city-centers-v2', JSON.stringify(cityCenters)); localStorage.removeItem('gachiga-city-centers'); } catch {}
   }
   return cityCenters[city];
 }
