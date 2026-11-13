@@ -601,7 +601,7 @@ textarea { resize: none; }
 .ap-box { display: flex; align-items: center; gap: 8px; padding-left: 14px; border: 1.5px solid transparent; border-radius: 14px; background: var(--bg); }
 .ap-box:focus-within { border-color: var(--primary); background: var(--surface); }
 .ap-box .ic { color: var(--muted); flex-shrink: 0; }
-.ap-box .ap-q { flex: 1; min-width: 0; border: 0 !important; padding-left: 0; background: transparent !important; }
+.ap-box input { flex: 1; min-width: 0; border: 0 !important; padding-left: 0; background: transparent !important; }
 .ap-results { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .ap-results:empty { display: none; }
 .ap-item { display: flex; gap: 12px; align-items: center; text-align: left; padding: 9px 12px; border-radius: 12px; background: var(--primary-soft); color: inherit; }

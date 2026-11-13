@@ -1703,11 +1703,11 @@ const airportLabel = code => {
   const a = airportByCode(code);
   return a ? `${a.code} · ${a.city} ${a.name}` : code ? `${code}${cityOfCode(code) ? ' · ' + cityOfCode(code) : ''}` : '';
 };
-const airportField = (name, label, code, mode = '') => `
+const airportField = (name, label, code, mode = '', hint = '') => `
   <div class="field ap-field" data-mode="${mode}">
     <span>${label}</span>
     <input type="hidden" name="${name}" value="${esc(code)}">
-    <div class="ap-box">${icon('search', 16)}<input class="ap-q" placeholder="도시·공항 이름이나 코드" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(airportLabel(code))}"></div>
+    <div class="ap-box">${icon('search', 16)}<input class="ap-q" placeholder="${hint}" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(airportLabel(code))}"></div>
     <div class="ap-results"></div>
   </div>`;
 
@@ -1733,13 +1733,13 @@ const field = (label, input) => `<label class="field"><span>${label}</span>${inp
 // 여행 창의 "이동수단": 비행기 · 기차 · 고속버스 · 자동차. 고른 수단에 맞춰 출발·도착 칸이 바뀌어요.
 // 비행기는 공항, 기차는 역, 고속버스는 터미널을 검색해서 고르고, 자동차는 직접 적어요.
 const STOP_FIELD = {
-  train: ['출발역', '도착역', '역이나 도시 이름 (부산, 시카고)', '한국·미국 주요 역은 바로 나오고, 다른 곳은 온라인에서 더 찾아요.'],
-  bus: ['출발 터미널', '도착 터미널', '터미널이나 도시 이름', '한국 터미널과 미국 주요 도시는 바로 나오고, 다른 곳은 온라인에서 더 찾아요.'],
+  train: ['출발역', '도착역', '예: 서울', '예: 부산'],
+  bus: ['출발 터미널', '도착 터미널', '예: 센트럴시티', '예: 전주'],
 };
-const stopField = (kind, name, label, value) => `
+const stopField = (kind, name, label, value, hint) => `
   <div class="field ap-field stop-field" data-kind="${kind}">
     <span>${label}</span>
-    <div class="ap-box">${icon('search', 16)}<input class="stop-q" name="${name}" maxlength="30" placeholder="${STOP_FIELD[kind][2]}" autocomplete="off" spellcheck="false" value="${esc(value)}"></div>
+    <div class="ap-box">${icon('search', 16)}<input class="stop-q" name="${name}" maxlength="30" placeholder="${hint}" autocomplete="off" spellcheck="false" value="${esc(value)}"></div>
     <div class="ap-results"></div>
   </div>`;
 // 목록에 없는 역·터미널은 오픈스트리트맵(Photon, 무료)에서 더 찾아요.
@@ -1781,18 +1781,15 @@ function routeBlock(mode, t) {
   const same = t && modeOf(t) === mode;
   const btn = (m, ic) => `<button type="button" class="mode-btn${mode === m ? ' on' : ''}" data-action="pick-mode" data-mode="${m}">${icon(ic, 22)}${MODES[m]}</button>`;
   const fields = mode === 'plane' ? `
-    ${airportField('from', '출발 공항', same ? t.from || '' : '')}
-    ${airportField('to', '도착 공항', same && t.to ? t.to : guessAirport(t?.name)?.code || '', same && t.to ? '' : 'auto')}
-    <p class="muted xsmall">탑승권에 보여요. 도시나 공항 이름(시애틀, 하네다, seattle)이나 코드(SEA)로 찾을 수 있어요. 도착을 비워 두면 여행 이름에 든 도시로 채워요.</p>`
+    ${airportField('from', '출발 공항', same ? t.from || '' : '', '', '예: 인천')}
+    ${airportField('to', '도착 공항', same && t.to ? t.to : guessAirport(t?.name)?.code || '', same && t.to ? '' : 'auto', '예: 오사카')}`
   : mode === 'car' ? `
     <div class="row">
-      ${field('출발지', `<input name="from" maxlength="20" placeholder="서울" value="${esc(same ? t.from : '')}">`)}
-      ${field('도착지', `<input name="to" maxlength="20" placeholder="강릉" value="${esc(same ? t.to : '')}">`)}
-    </div>
-    <p class="muted xsmall">표지판에 보여요. 도착지는 날씨를 찾을 때도 써요.</p>` : `
-    ${stopField(mode, 'from', STOP_FIELD[mode][0], same ? t.from || '' : '')}
-    ${stopField(mode, 'to', STOP_FIELD[mode][1], same ? t.to || '' : '')}
-    <p class="muted xsmall">${STOP_FIELD[mode][3]} 목록에 없는 곳은 그대로 적어도 돼요.</p>`;
+      ${field('출발지', `<input name="from" maxlength="20" placeholder="예: 서울" value="${esc(same ? t.from : '')}">`)}
+      ${field('도착지', `<input name="to" maxlength="20" placeholder="예: 강릉" value="${esc(same ? t.to : '')}">`)}
+    </div>` : `
+    ${stopField(mode, 'from', STOP_FIELD[mode][0], same ? t.from || '' : '', STOP_FIELD[mode][2])}
+    ${stopField(mode, 'to', STOP_FIELD[mode][1], same ? t.to || '' : '', STOP_FIELD[mode][3])}`;
   return `
     <input type="hidden" name="mode" value="${mode}">
     <div class="field"><span>이동수단</span>
