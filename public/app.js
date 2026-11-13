@@ -980,8 +980,8 @@ function eventRow(e, pin) {
       ${e.place ? `<span class="stop-meta">${icon('pin', 13)} ${esc(e.place)}${!eventLoc(e) && !e.placeId ? ' <em class="no-loc">지도에 없음</em>' : ''}</span>` : ''}
       ${e.note ? `<span class="stop-meta note">${esc(e.note)}</span>` : ''}
     </button>
-    ${avatar(e.createdBy, 'xs')}
-    ${eventLoc(e) ? `<a class="stop-go" href="${esc(gmapsToUrl(e))}" target="_blank" rel="noopener" aria-label="구글맵으로 길찾기">${icon('nav', 12)}</a>` : ''}
+    ${avatar(e.createdBy, 'sm')}
+    ${eventLoc(e) ? `<a class="stop-go" href="${esc(gmapsToUrl(e))}" target="_blank" rel="noopener" aria-label="구글맵으로 길찾기">${icon('nav', 14)}</a>` : ''}
   </div>`;
 }
 
