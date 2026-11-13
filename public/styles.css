@@ -288,6 +288,7 @@ button:active, a:active { transform: scale(.98); }
 /* 보이는 크기는 프로필과 같게, 손가락으로 누르는 범위는 넓게 */
 .stop-go::before { content: ''; position: absolute; inset: -8px; }
 .stop-go .ic { fill: currentColor; }
+.stop-go:active { transform: translateY(-50%) scale(.98); } /* 눌렀을 때 줄어드는 효과가 가운데 맞춤을 덮어쓰지 않게 */
 .add-inline { display: block; width: 100%; padding: 10px; text-align: center; color: var(--muted); font-size: 14px; font-weight: 600; border: 1.5px dashed var(--line); border-radius: 16px; }
 
 /* ---------- 장소: 엽서 ---------- */
@@ -790,6 +791,7 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 
 /* 새 버전 알림 */
 .update-pill { position: fixed; top: calc(env(safe-area-inset-top) + 10px); left: 50%; transform: translateX(-50%); z-index: 95; display: inline-flex; gap: 6px; align-items: center; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--ink); color: #fff; font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap; box-shadow: 0 10px 30px rgba(19, 41, 75, .3); animation: fade .2s; }
+.update-pill:active { transform: translateX(-50%) scale(.98); } /* 눌러도 제자리에서 살짝만 줄어들게 */
 
 /* 직접 복사하기 창 */
 .copy-box { width: 100%; margin-top: 10px; resize: none; font: 14px/1.55 var(--body); user-select: text; -webkit-user-select: text; }
