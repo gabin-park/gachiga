@@ -267,16 +267,26 @@ function toast(msg) {
   toastTimer = setTimeout(() => $toast.classList.remove('show'), 2400);
 }
 function errorText(e) {
-  if (e?.code === 'permission-denied') return '접근 권한이 없어요. 여행에서 나갔거나 내보내졌을 수 있어요.';
-  if (e?.code === 'not-found') return '여행을 찾을 수 없어요.';
-  if (e?.code === 'handle-taken') return '이미 누가 쓰고 있는 아이디예요.';
-  return '문제가 생겼어요: ' + (e?.message || e);
+  if (e?.code === 'permission-denied') return '접근 권한이 없어요.\n여행에서 나갔거나 내보내졌을 수 있어요';
+  if (e?.code === 'not-found') return '여행을 찾을 수 없어요';
+  if (e?.code === 'handle-taken') return '이미 누가 쓰고 있는 아이디예요';
+  const msg = String(e?.message || '');
+  if (/[가-힣]/.test(msg)) return msg; // 앱이 직접 적은 안내
+  return navigator.onLine === false ? '인터넷 연결이 끊겼어요.\n연결을 확인하고 다시 해주세요' : '잠깐 문제가 생겼어요.\n조금 뒤에 다시 해주세요';
 }
 function run(fn, okMsg) {
   return Promise.resolve().then(fn).then(() => { if (okMsg) toast(okMsg); }).catch(e => { console.error(e); toast(errorText(e)); });
 }
 function copyText(text, okMsg) {
-  navigator.clipboard.writeText(text).then(() => toast(okMsg)).catch(() => prompt('복사하세요', text));
+  navigator.clipboard.writeText(text).then(() => toast(okMsg)).catch(() => copyByHand(text));
+}
+// 자동 복사가 막힌 브라우저: 글을 앱 창에 펼쳐 두고 길게 눌러 복사하게 해요 (브라우저 기본 prompt 창 대신)
+function copyByHand(text) {
+  openSheet('직접 복사하기', `
+    <p class="muted small">자동 복사가 막혀 있어요. 아래 글을 길게 눌러 복사해주세요.</p>
+    <textarea class="copy-box" readonly rows="${Math.min(10, text.split('\n').length + 1)}">${esc(text)}</textarea>`);
+  const box = $sheet.querySelector('.copy-box');
+  box.addEventListener('focus', () => box.select());
 }
 
 // ---------- 데이터 구독 & 라우팅 ----------
@@ -342,8 +352,8 @@ function openTrip(id) {
   const fail = e => leave(errorText(e));
   unsubTrip = [
     store.watchTrip(id, t => {
-      if (!t) return leave('여행이 삭제됐어요.');
-      if (!t.members.includes(state.user.uid)) return leave('이 여행의 멤버가 아니게 됐어요.');
+      if (!t) return leave('여행이 삭제됐어요');
+      if (!t.members.includes(state.user.uid)) return leave('이 여행의 멤버가 아니게 됐어요');
       state.trip = t;
       render();
     }, fail),
@@ -517,7 +527,7 @@ function inAppCard() {
         <div><small>TO</small><b>${IN_APP.android ? 'CHROME' : 'SAFARI'}</b></div>
       </div>
       <div class="inapp-pass-body">
-        <b>${browser}에서 열어 주세요</b>
+        <b>${browser}에서 열어주세요</b>
         <p>이 화면에서는 구글 로그인이 막혀 있어요.</p>
         <button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>
         <p class="inapp-help">안 열리나요? <button class="tip-link" data-action="copy-site">링크 복사하기</button></p>
@@ -539,7 +549,7 @@ function viewOnboarding() {
   <main class="login onboard">
     <div class="onboard-badge">${icon('at', 40)}</div>
     <h1 class="brand sm">나만의 아이디 정하기</h1>
-    <p class="tagline">친구가 이 아이디로 나를 찾아 친구 추가해요.<br>영문 소문자 · 숫자 · _ · . 으로 3~20자</p>
+    <p class="tagline">친구가 이 아이디로 나를 찾아 친구 추가해요.<br>영문 소문자, 숫자, _ 와 . 으로 3~20자</p>
     <form data-form="handle" class="login-form">
       <label class="handle-input"><span>@</span>
         <input name="handle" value="${suggestion}" maxlength="20" autocapitalize="off" autocomplete="off" spellcheck="false" required>
@@ -1643,8 +1653,8 @@ function tripSheet(t) {
     ${airportField('to', '도착 공항', t?.to || guessAirport(t?.name)?.code || '', t?.to ? '' : 'auto', '예: 오사카')}
     ${t ? `<p class="muted xsmall">${owner ? '캡틴은 여행을 삭제할 수 있어요. 삭제하면 모든 멤버에게서 사라져요.' : '여행에서 나가면 다시 초대받기 전까지 볼 수 없어요.'}</p>` : ''}
   `, d => {
-    if (!d.name.trim()) return '여행 이름을 적어주세요.';
-    if (d.startDate && d.endDate && d.endDate < d.startDate) return '오는 날이 가는 날보다 빨라요.';
+    if (!d.name.trim()) return '여행 이름을 적어주세요';
+    if (d.startDate && d.endDate && d.endDate < d.startDate) return '오는 날이 가는 날보다 빨라요';
     const code = v => String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     const data = { name: d.name.trim(), startDate: d.startDate, endDate: d.endDate || d.startDate, from: code(d.from), to: code(d.to) };
     if (t) return store.updateTrip(t.id, data);
@@ -1698,7 +1708,7 @@ function membersSheet() {
             ${candidates.map(f => personRow(f, `<button class="btn-sm primary" data-action="invite-friend" data-id="${esc(f.uid)}">${icon('plus', 16)} 초대</button>`)).join('')}
           </div>` : `
           <div class="empty-mini">
-            ${state.friends.length ? '친구를 모두 초대했어요.' : '아직 친구가 없어요.<br>프로필에서 아이디로 친구를 먼저 추가해 주세요.'}
+            ${state.friends.length ? '친구를 모두 초대했어요.' : '아직 친구가 없어요.<br>프로필에서 아이디로 친구를 먼저 추가해주세요.'}
             <a class="btn block" href="#/me">${icon('userPlus', 18)} 친구 추가하러 가기</a>
           </div>`}
         <p class="muted xsmall">초대받은 친구가 수락해야 멤버가 돼요. 내보낸 멤버는 이 여행을 더 이상 볼 수 없어요.</p>` : `
@@ -1747,7 +1757,7 @@ function searchResultHtml(p) {
 
 async function searchHandle(raw, $out) {
   const handle = String(raw || '').trim().replace(/^@/, '').toLowerCase();
-  if (!HANDLE_RE.test(handle)) { $out.innerHTML = `<p class="search-msg">아이디는 영문 소문자·숫자·_·. 3~20자예요.</p>`; return; }
+  if (!HANDLE_RE.test(handle)) { $out.innerHTML = `<p class="search-msg">아이디는 영문 소문자, 숫자, _ 와 . 으로 3~20자예요.</p>`; return; }
   $out.innerHTML = `<p class="search-msg">찾는 중…</p>`;
   try {
     const p = await store.findByHandle(handle);
@@ -1769,7 +1779,7 @@ function checkHandleInput(input) {
   if (clean !== input.value) input.value = clean;
   const show = (cls, text) => { $st.className = `handle-status ${cls}`; $st.innerHTML = text; };
   clearTimeout(handleCheckTimer);
-  if (!HANDLE_RE.test(clean)) return show('bad', clean ? '영문 소문자·숫자·_·. 3~20자로 적어주세요' : '');
+  if (!HANDLE_RE.test(clean)) return show('bad', clean ? '영문 소문자, 숫자, _ 와 . 으로 3~20자 적어주세요' : '');
   if (clean === me().handle) return show('', '지금 쓰는 아이디예요');
   show('', '확인하는 중…');
   handleCheckTimer = setTimeout(async () => {
@@ -1788,10 +1798,10 @@ function handleSheet() {
       <input name="handle" value="${esc(me().handle)}" maxlength="20" autocapitalize="off" autocomplete="off" spellcheck="false">
     </label>
     <p class="handle-status" aria-live="polite"></p>
-    <p class="muted xsmall">영문 소문자 · 숫자 · _ · . 으로 3~20자. 바꾸면 예전 아이디로는 나를 찾을 수 없어요.</p>
+    <p class="muted xsmall">영문 소문자, 숫자, _ 와 . 으로 3~20자예요. 바꾸면 예전 아이디로는 나를 찾을 수 없어요.</p>
   `, d => {
     const handle = d.handle.trim().replace(/^@/, '').toLowerCase();
-    if (!HANDLE_RE.test(handle)) return '아이디는 영문 소문자·숫자·_·. 3~20자예요.';
+    if (!HANDLE_RE.test(handle)) return '아이디는 영문 소문자, 숫자, _ 와 . 으로\n3~20자 적어주세요';
     return store.setHandle(state.user.uid, handle).then(() => toast('아이디를 바꿨어요'));
   });
   checkHandleInput($sheet.querySelector('input[name=handle]'));
@@ -1828,9 +1838,9 @@ function eventSheet(e = {}, { fixedDay = false } = {}) {
     </div>
     ${field('메모', `<textarea name="note" rows="2" maxlength="300" placeholder="예약번호, 준비물 등">${esc(e.note)}</textarea>`)}
   `, (d, form) => {
-    if (!d.title.trim()) return '무엇을 할지 적어주세요.';
-    if (d.endTime && !d.time) return '끝나는 시간을 넣으려면 시작 시간도 정해주세요.';
-    if (d.endTime && d.endTime <= d.time) return '끝나는 시간이 시작보다 늦어야 해요.';
+    if (!d.title.trim()) return '무엇을 할지 적어주세요';
+    if (d.endTime && !d.time) return '끝나는 시간을 넣으려면\n시작 시간도 정해주세요';
+    if (d.endTime && d.endTime <= d.time) return '끝나는 시간이 시작보다 늦어야 해요';
     const place = d.place.trim();
     const linked = state.places.find(p => p.name === place);
     const data = { title: d.title.trim(), date: d.date || '', time: d.time, endTime: d.endTime || '', place, placeId: linked?.id || '', note: d.note.trim() };
@@ -1948,7 +1958,7 @@ async function pickSearch(box) {
   const c = map.getCenter();
   if (GMAPS_LINK.test(q)) {
     const loc = await gmapsLinkLoc(q, { lat: c.lat, lng: c.lng });
-    if (!loc) { $r.innerHTML = '<p class="pick-msg">링크에서 위치를 못 읽었어요. 구글맵에서 장소를 연 뒤 공유 → 링크 복사로 다시 붙여넣어 주세요.</p>'; return; }
+    if (!loc) { $r.innerHTML = '<p class="pick-msg">링크에서 위치를 못 읽었어요. 구글맵에서 장소를 연 뒤 공유 → 링크 복사로 다시 붙여넣어주세요.</p>'; return; }
     map.flyTo({ center: [loc.lng, loc.lat], zoom: 16, duration: 700 });
     $r.innerHTML = `<p class="pick-msg ok">${icon('check', 14)} ${loc.exact ? '구글맵 위치로 옮겼어요' : '구글맵 링크의 이름으로 찾았어요'}${loc.name ? ` · ${esc(loc.name)}` : ''}. ${loc.exact ? '맞으면 정해주세요.' : '핀을 정확히 맞춰주세요.'}</p>`;
     return;
@@ -1959,7 +1969,7 @@ async function pickSearch(box) {
       <button type="button" class="geo-item" data-action="pick-go" data-id="${i}">
         ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small>${r.km != null ? `<em class="geo-km">${fmtKm(r.km)}</em> · ` : ''}${esc(r.address)}</small></span>
       </button>`).join('')
-    : '<p class="pick-msg">못 찾았어요. 영어 이름으로 찾거나, 구글맵에서 장소 링크를 복사해 붙여넣어 주세요.</p>';
+    : '<p class="pick-msg">못 찾았어요. 영어 이름으로 찾거나, 구글맵에서 장소 링크를 복사해 붙여넣어주세요.</p>';
 }
 
 // 구글맵 링크 → 위치. 긴 링크는 바로 읽고, 짧은 공유 링크(maps.app.goo.gl)는 가치가 서버가 열어서 읽어 줘요.
@@ -2000,7 +2010,7 @@ async function pickEventOnMap(id, place) {
     <p class="pick-hint"><b>'${esc(place)}'</b>이(가) 지도 어디인지 아직 안 정해졌어요.<br>지도를 움직여서 가운데 핀을 그 장소에 맞춰주세요.</p>
     ${pickMapHtml()}
   `, () => {
-    if (!pickMap) return '지도가 뜰 때까지 잠깐만 기다려주세요.';
+    if (!pickMap) return '지도가 뜰 때까지 잠깐만 기다려주세요';
     const c = pickMap.getCenter();
     return store.updateItem(state.tripId, 'events', id, { lat: c.lat, lng: c.lng, address: '' }).then(() => toast('지도에 넣었어요'));
   }, { save: '이 위치로' });
@@ -2036,7 +2046,7 @@ async function searchPlaceLocation(form) {
         <button type="button" class="geo-item" data-action="geo-pick" data-id="${i}">
           ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small>${r.km != null ? `<em class="geo-km">${fmtKm(r.km)}</em> · ` : ''}${esc(r.address)}</small></span>
         </button>`).join('')
-      : '<p class="search-msg">못 찾았어요. 지점명을 빼거나 "도시 이름 + 장소"로 다시 적어보세요.<br>또는 구글맵에서 장소를 열고 주소창 링크를 아래 링크 칸에 붙여넣어 주세요.</p>';
+      : '<p class="search-msg">못 찾았어요. 지점명을 빼거나 "도시 이름 + 장소"로 다시 적어보세요.<br>또는 구글맵에서 장소를 열고 주소창 링크를 아래 링크 칸에 붙여넣어주세요.</p>';
   } catch (e) {
     $out.innerHTML = `<p class="search-msg">${esc(e.message)}</p>`;
   }
@@ -2068,7 +2078,7 @@ function placeSheet(p = {}) {
     </div>
     ${field('메모', `<textarea name="note" rows="2" maxlength="300" placeholder="왜 가고 싶은지, 영업시간 등">${esc(p.note)}</textarea>`)}
   `, (d, form) => {
-    if (!d.name.trim()) return '장소 이름을 적어주세요.';
+    if (!d.name.trim()) return '장소 이름을 적어주세요';
     const lat = d.lat === '' ? null : Number(d.lat);
     const lng = d.lng === '' ? null : Number(d.lng);
     const cats = [...form.querySelectorAll('input[name=category]:checked')].map(x => x.value);
@@ -2109,7 +2119,7 @@ async function autoLocate(form) {
   geoResults = found;
   if (!found.length) {
     setPlaceLocation(form, null);
-    $out.innerHTML = '<p class="search-msg">위치를 자동으로 못 찾았어요. 지점명·도시를 붙여 보거나, 구글맵 링크를 링크 칸에 붙여넣어 주세요.</p>';
+    $out.innerHTML = '<p class="search-msg">위치를 자동으로 못 찾았어요. 지점명·도시를 붙여 보거나, 구글맵 링크를 링크 칸에 붙여넣어주세요.</p>';
     return;
   }
   setPlaceLocation(form, found[0]);
@@ -2158,7 +2168,7 @@ async function analyzeIntoForm(form, url) {
   const say = t => { if ($hint()) $hint().textContent = t; };
   const alive = () => form.isConnected && state.tripId === tripId && form.url.value === url;
   say('게시물 글을 읽고 있어요…');
-  const slow = setTimeout(() => alive() && say('장소가 많은 게시물이에요. 1~2분 걸릴 수 있으니 기다려 주세요…'), 8000);
+  const slow = setTimeout(() => alive() && say('장소가 많은 게시물이에요. 1~2분 걸릴 수 있으니 기다려주세요…'), 8000);
   let result;
   try {
     result = await analyzeInstagram(url, t => { clearTimeout(slow); say(t); });
@@ -2229,7 +2239,7 @@ function pickPlacesSheet(url, data, found) {
     }).join('')}</div>
   `, d => {
     const picked = found.filter((_, i) => d[`pick_${i}`]);
-    if (!picked.length) return '담을 곳을 하나 이상 골라주세요.';
+    if (!picked.length) return '담을 곳을 하나 이상 골라주세요';
     return Promise.all(picked.map(c => store.addItem(state.tripId, 'places', {
       name: c.name, category: c.category, categories: [c.category], url, note: c.note,
       lat: c.loc?.lat ?? null, lng: c.loc?.lng ?? null, address: c.loc?.address || '',
@@ -2259,9 +2269,9 @@ function expenseSheet(x = {}) {
   `, (d, form) => {
     const split = solo ? [state.user.uid] : new FormData(form).getAll('splitAmong');
     const amount = Number(d.amount);
-    if (!d.title.trim()) return '어디에 썼는지 적어주세요.';
-    if (!(amount > 0)) return '금액을 입력해 주세요.';
-    if (!split.length) return '나눌 사람을 한 명 이상 골라주세요.';
+    if (!d.title.trim()) return '어디에 썼는지 적어주세요';
+    if (!(amount > 0)) return '금액을 입력해주세요';
+    if (!split.length) return '나눌 사람을 한 명 이상 골라주세요';
     const data = { title: d.title.trim(), amount, currency: d.cur || cur, date: d.date, paidBy: solo ? state.user.uid : d.paidBy, splitAmong: split };
     return x.id
       ? store.updateItem(state.tripId, 'expenses', x.id, data)
@@ -2362,7 +2372,7 @@ const actions = {
     evPickMap = await makePickMap($f.querySelector('.map'));
   },
   'ev-map-confirm': (d, el) => {
-    if (!evPickMap) return toast('지도가 뜰 때까지 잠깐만 기다려주세요.');
+    if (!evPickMap) return toast('지도가 뜰 때까지 잠깐만 기다려주세요');
     const c = evPickMap.getCenter();
     setEventLoc(el.form, { lat: c.lat, lng: c.lng, address: '' }, el.form.place.value.trim() || '고른 위치');
   },
@@ -2388,7 +2398,7 @@ const actions = {
   },
   'paste-link': async (d, el) => {
     let text;
-    try { text = await navigator.clipboard.readText(); } catch { return toast('붙여넣기가 막혀 있어요. 링크 칸을 길게 눌러 붙여넣어 주세요.'); }
+    try { text = await navigator.clipboard.readText(); } catch { return toast('붙여넣기가 막혀 있어요.\n링크 칸을 길게 눌러 붙여넣어주세요'); }
     const url = extractLink(text);
     if (!url) return toast('복사한 내용에 링크가 없어요');
     el.form.url.value = url;
@@ -2509,8 +2519,8 @@ Object.assign(actions, {
   'open-outside': () => openOutside(),
   'copy-site': async () => {
     const url = location.href;
-    try { await navigator.clipboard.writeText(url); toast(`링크를 복사했어요. ${IN_APP?.android ? '크롬' : '사파리'} 주소창에 붙여넣어 주세요.`); }
-    catch { prompt('이 링크를 복사해 주세요', url); }
+    try { await navigator.clipboard.writeText(url); toast(`링크를 복사했어요.\n${IN_APP?.android ? '크롬' : '사파리'} 주소창에 붙여넣어주세요`); }
+    catch { copyByHand(url); }
   },
   'install-app': async () => {
     if (!installPrompt) return;
@@ -2659,7 +2669,7 @@ document.addEventListener('input', e => {
       form.dataset.autoLoc = '';
       setPlaceLocation(form, { lat: loc.lat, lng: loc.lng, address: loc.name });
       if (!form.name.value.trim() && loc.name) form.name.value = loc.name;
-      toast(loc.exact ? '구글맵 링크에서 위치를 찾았어요' : '링크 속 이름으로 위치를 찾았어요. 맞는지 확인해 주세요.');
+      toast(loc.exact ? '구글맵 링크에서 위치를 찾았어요' : '링크 속 이름으로 위치를 찾았어요.\n맞는지 확인해주세요');
     });
   }
 });
@@ -2720,7 +2730,7 @@ document.addEventListener('submit', e => {
   if (form.dataset.form === 'signin') return run(() => store.signIn(data.name?.trim()));
   if (form.dataset.form === 'handle') {
     const handle = String(data.handle || '').trim().replace(/^@/, '').toLowerCase();
-    if (!HANDLE_RE.test(handle)) return toast('아이디는 영문 소문자·숫자·_·. 3~20자예요.');
+    if (!HANDLE_RE.test(handle)) return toast('아이디는 영문 소문자, 숫자, _ 와 . 으로\n3~20자 적어주세요');
     state.guide = 0; // 아이디를 만들고 나면 사용법 슬라이드를 한 번 보여줘요
     return run(() => store.setHandle(state.user.uid, handle));
   }
