@@ -757,6 +757,11 @@ function viewMe() {
   </header>
   <main class="page">
     <button class="btn primary block" data-action="add-friend">${icon('userPlus')} 아이디로 친구 추가</button>
+    <button class="share-card" data-action="share-app">
+      <span class="share-card-ic">${icon('share', 18)}</span>
+      <span class="share-card-text"><b>친구에게 가치가 알려주기</b><small>친구랑 같이 여행 계획 짜 보세요!</small></span>
+      ${icon('chevron', 18)}
+    </button>
 
     ${state.requestsIn.length ? `
       <h2 class="section-title pad">받은 친구 요청 <span class="count">${state.requestsIn.length}</span></h2>
@@ -2089,7 +2094,7 @@ function placeSheet(p = {}) {
         <input name="url" inputmode="url" autocapitalize="off" placeholder="인스타·구글맵 링크" value="${esc(p.url)}">
         <button type="button" class="btn-sm" data-action="paste-link">${icon('copy', 15)} 붙여넣기</button>
       </div>
-      <small class="hint">인스타·구글맵 링크를 붙여넣으면 위치를 자동으로 찾고 저장까지 해줘요.</small>
+      <small class="hint">인스타·구글맵 링크를 붙여넣으면 이름과 위치를 자동으로 찾아줘요.</small>
     </div>
     ${field('메모', `<textarea name="note" rows="2" maxlength="300" placeholder="왜 가고 싶은지, 영업시간 등">${esc(p.note)}</textarea>`)}
   `, (d, form) => {
@@ -2497,6 +2502,12 @@ const actions = {
   // 친구
   'add-friend': addFriendSheet,
   'copy-handle': () => copyText(me().handle, `@${me().handle} 복사했어요`),
+  // 휴대폰 공유 창(카톡·문자 등)을 띄우고, 공유 창이 없는 브라우저에서는 링크를 복사해요
+  'share-app': () => {
+    const url = location.origin + '/', text = '가치가에서 같이 여행 계획 짜요!';
+    if (!navigator.share) return copyText(`${text}\n${url}`, '링크를 복사했어요.\n친구에게 붙여넣어 보내주세요.');
+    navigator.share({ title: '가치가', text, url }).catch(e => { if (e.name !== 'AbortError') copyText(`${text}\n${url}`, '링크를 복사했어요.\n친구에게 붙여넣어 보내주세요.'); });
+  },
   'edit-handle': handleSheet,
   'send-request': (d, el) => {
     if (!lastFound) return;

@@ -773,6 +773,12 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 
 /* 프로필: 지난 여행 기록 · 사용법 다시 보기 */
 .me-links { display: grid; gap: 8px; margin-top: 18px; }
+.share-card { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 10px; padding: 14px; border-radius: 18px; background: var(--primary-soft); color: var(--primary-deep); }
+.share-card-ic { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #fff; }
+.share-card-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.share-card-text b { font-size: 15px; }
+.share-card-text small { font-size: 12.5px; color: var(--muted); }
+.share-card > .ic:last-child { color: var(--primary); }
 .past-page .ticket.past { opacity: 1; }
 
 /* 새 버전 알림 */
