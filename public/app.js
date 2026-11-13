@@ -2401,7 +2401,7 @@ const actions = {
     run(() => store.addItem(state.tripId, 'expenses', {
       kind: 'transfer', title: '정산 송금', amount, currency: currency(), date: todayStr(),
       paidBy: d.from, splitAmong: [d.to], createdBy: state.user.uid,
-    }), `${memberName(d.from)} → ${memberName(d.to)} 보낸 걸로 기록했어요`);
+    }), `${memberName(d.from)} → ${memberName(d.to)}\n보낸 걸로 기록했어요`);
   },
   'undo-sent': d => run(() => store.removeItem(state.tripId, 'expenses', d.id), '보낸 기록을 지웠어요'),
   'copy-settle': () => {
