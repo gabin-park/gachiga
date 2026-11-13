@@ -498,12 +498,21 @@ function viewLogin() {
 // 앱 안 브라우저면 로그인 버튼 대신 '사파리·크롬에서 열기' 안내를 보여줘요.
 function inAppCard() {
   const browser = IN_APP.android ? '크롬' : '사파리';
+  const from = { 카톡: 'KAKAO', 인스타: 'INSTAGRAM', 페이스북: 'FACEBOOK', 라인: 'LINE' }[IN_APP.name] || 'APP';
   return `
-    <div class="inapp-card">
-      <b>${browser}에서 열어 주세요</b>
-      <p>이 화면에서는 구글 로그인이 막혀 있어요.</p>
-      <button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>
-      <p class="inapp-help">안 열리나요? <button class="tip-link" data-action="copy-site">링크 복사하기</button></p>
+    <div class="inapp-pass">
+      <div class="inapp-pass-band"><span>GATE CHANGE</span><span>탑승구 변경</span></div>
+      <div class="inapp-route">
+        <div><small>FROM</small><b>${from}</b></div>
+        <svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path transform="rotate(90 12 12)" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+        <div><small>TO</small><b>${IN_APP.android ? 'CHROME' : 'SAFARI'}</b></div>
+      </div>
+      <div class="inapp-pass-body">
+        <b>${browser}에서 열어 주세요</b>
+        <p>이 화면에서는 구글 로그인이 막혀 있어요.</p>
+        <button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>
+        <p class="inapp-help">안 열리나요? <button class="tip-link" data-action="copy-site">링크 복사하기</button></p>
+      </div>
     </div>`;
 }
 // 카톡은 바깥 브라우저로 여는 기능을 주고, 안드로이드는 크롬으로 바로 넘길 수 있어요.

@@ -74,12 +74,12 @@ button:active, a:active { transform: scale(.98); }
 
 /* 여행 화면 위쪽: 항공권 한 장. 절취선 양 끝의 홈은 mask로 뚫어 하늘 배경이 비쳐요. */
 /* 항공권 종이: 미색 바탕에 은은한 섬유 결 + 살짝 도톰한 표면 */
-.trip-pass, .ticket {
+.trip-pass, .ticket, .inapp-pass {
   --surface: #fcfbf7; --line: #e8e4da; --line-strong: #d3cbbb;
   --paper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='b' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.4' numOctaves='3' stitchTiles='stitch'/%3E%3CfeDiffuseLighting lighting-color='%23fff' surfaceScale='.9'%3E%3CfeDistantLight azimuth='45' elevation='62'/%3E%3C/feDiffuseLighting%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .3 0 0 0 0 .32 -.16 0 0 0 .16'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23b)'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .35' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .32 0 0 0 0 .28 0 0 0 .13 -.02'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E"), #fcfbf7;
 }
 /* 항공권 글씨: 타자기체 */
-.trip-pass, .ticket { --mono: 'Courier Prime', 'IBM Plex Mono', ui-monospace, monospace; }
+.trip-pass, .ticket, .inapp-pass { --mono: 'Courier Prime', 'IBM Plex Mono', ui-monospace, monospace; }
 .trip-pass .rt-code, .ticket .rt-code, .trip-pass .f-val, .ticket .f-val { font-weight: 700; }
 .trip-pass { margin-top: 14px; filter: drop-shadow(0 6px 14px rgba(19, 41, 75, .12)); }
 .tp-top, .tp-bottom { background: var(--paper); }
@@ -153,10 +153,19 @@ button:active, a:active { transform: scale(.98); }
 .tagline { color: var(--muted); margin: 4px 0 0; }
 .login-form { width: 100%; max-width: 330px; margin-top: 32px; display: grid; gap: 10px; }
 .login-form input { background: var(--surface); box-shadow: var(--shadow); text-align: center; }
-.inapp-card { width: 100%; max-width: 330px; margin-top: 28px; display: grid; gap: 8px; padding: 18px 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); text-align: left; }
-.inapp-card > b { font-size: 16px; color: var(--ink); }
-.inapp-card > p { margin: 0 0 4px; font-size: 14px; line-height: 1.6; color: var(--muted); }
-.inapp-card > .inapp-help { margin: 4px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
+.inapp-pass { width: 100%; max-width: 330px; margin-top: 28px; border-radius: 18px; overflow: hidden; background: var(--paper); box-shadow: 0 0 0 1px var(--line), 0 10px 26px rgba(19, 41, 75, .14); text-align: left; }
+.inapp-pass-band { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 16px; background: var(--primary-deep); color: #fff; font: 700 11px/1 var(--mono); letter-spacing: .14em; }
+.inapp-pass-band span:last-child { font-family: inherit; font-weight: 600; letter-spacing: 0; opacity: .75; }
+.inapp-route { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 8px; padding: 14px 16px 12px; }
+.inapp-route div { min-width: 0; }
+.inapp-route div:last-child { text-align: right; }
+.inapp-route small { display: block; margin-bottom: 3px; font: 700 10px/1 var(--mono); letter-spacing: .14em; color: #8a8170; }
+.inapp-route b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 clamp(16px, 5.4vw, 20px)/1.1 var(--mono); color: var(--ink); }
+.inapp-route .ic { margin-bottom: 2px; color: var(--red); }
+.inapp-pass-body { display: grid; gap: 6px; padding: 14px 16px 16px; border-top: 2px dashed var(--line-strong); }
+.inapp-pass-body > b { font-size: 16px; color: var(--ink); }
+.inapp-pass-body > p { margin: 0 0 8px; font-size: 14px; line-height: 1.6; color: var(--muted); word-break: keep-all; }
+.inapp-pass-body > .inapp-help { margin: 6px 0 0; text-align: center; font-size: 13px; }
 .notice { background: var(--primary-soft); color: var(--primary); padding: 10px 14px; border-radius: 14px; font-size: 14px; font-weight: 700; margin-top: 20px; }
 .g { font-weight: 900; background: #fff; color: #4285f4; width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; }
 
