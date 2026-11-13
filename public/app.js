@@ -1851,7 +1851,7 @@ function eventSheet(e = {}, { fixedDay = false } = {}) {
       <div class="place-found"></div>
       ${e.id && e.place && !e.placeId && !hasCoords(e)
         ? `<button type="button" class="btn-sm subtle need-loc" data-action="ev-geo-again">${icon('pin', 14)} 아직 지도에 없어요 · 위치 고르기</button>`
-        : '<small class="hint">장소를 적으면 후보가 떠요. 맞는 곳을 골라야 일정 지도에 핀이 꽂혀요.</small>'}
+        : '<small class="hint">장소를 적고 후보에서 고르면 지도에 표시돼요.</small>'}
     </div>
     ${fixedDay && e.date ? '' : dayField}
     <div class="row">
