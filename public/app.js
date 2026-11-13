@@ -74,6 +74,7 @@ const ICONS = {
   wx_snow: '<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M8 15h.01M8 19h.01M12 17h.01M12 21h.01M16 15h.01M16 19h.01"/>',
   wx_storm: '<path d="M6 16.33A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 1.5 8.74"/><path d="m13 12-3 5h4l-3 5"/>',
   drop: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   swap: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
   nav: '<path d="M3 11 22 2l-9 19-2-8-8-2Z"/>',
   pin: '<path d="M20 10c0 5-5.5 10.2-7.4 11.8a1 1 0 0 1-1.2 0C9.5 20.2 4 15 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
@@ -2597,6 +2598,27 @@ function tick() {
 }
 setInterval(tick, 20000);
 document.addEventListener('visibilitychange', tick);
+
+// 홈 화면 앱은 내려뒀다 다시 열어도 옛 화면을 그대로 이어 보여줘요.
+// 돌아올 때마다 index.html의 ?v= 도장을 확인해서, 새로 배포됐으면 위에 '새 버전' 알약을 띄워요.
+const myVersion = document.querySelector('script[src*="app.js"]')?.src.match(/[?&]v=(\w+)/)?.[1];
+let versionCheckedAt = 0;
+async function checkVersion() {
+  if (document.hidden || !myVersion || document.querySelector('.update-pill') || Date.now() - versionCheckedAt < 60000) return;
+  versionCheckedAt = Date.now();
+  try {
+    const html = await fetch('./', { cache: 'no-store' }).then(r => r.text());
+    const latest = html.match(/app\.js\?v=(\w+)/)?.[1];
+    if (latest && latest !== myVersion) {
+      const pill = Object.assign(document.createElement('button'), { className: 'update-pill', type: 'button' });
+      pill.innerHTML = `${icon('refresh', 15)} 새 버전 · 눌러서 바꾸기`;
+      pill.onclick = () => location.reload();
+      document.body.appendChild(pill);
+    }
+  } catch {}
+}
+document.addEventListener('visibilitychange', checkVersion);
+setInterval(checkVersion, 10 * 60000);
 
 document.addEventListener('submit', e => {
   e.preventDefault();

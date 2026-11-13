@@ -741,3 +741,6 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 /* 프로필: 지난 여행 기록 · 사용법 다시 보기 */
 .me-links { display: grid; gap: 8px; margin-top: 18px; }
 .past-page .ticket.past { opacity: 1; }
+
+/* 새 버전 알림 */
+.update-pill { position: fixed; top: calc(env(safe-area-inset-top) + 10px); left: 50%; transform: translateX(-50%); z-index: 95; display: inline-flex; gap: 6px; align-items: center; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--ink); color: #fff; font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap; box-shadow: 0 10px 30px rgba(19, 41, 75, .3); animation: fade .2s; }
