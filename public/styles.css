@@ -728,6 +728,10 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 .guide-nav { display: flex; gap: 8px; }
 .ic-more { position: relative; top: -.05em; display: inline-flex; align-items: center; justify-content: center; gap: .12em; width: 1.4em; height: 1.4em; margin: -.3em .15em; border-radius: 50%; background: #2b3a55; vertical-align: middle; }
 .ic-more i { width: .2em; height: .2em; border-radius: 50%; background: #fff; }
+.ic-more.col { flex-direction: column; gap: .1em; }
+.ic-more.share { background: var(--primary); color: #fff; border-radius: .35em; }
+.ic-more.share .ic { width: .95em; height: .95em; }
+.guide-install { margin-top: 10px; }
 .guide-nav .btn:not(.primary) { flex: none; padding: 0 18px 0 14px; gap: 4px; }
 @keyframes fade { from { opacity: 0; } }
 

@@ -26,6 +26,7 @@ const CURRENCIES = [
 // 환율·날씨는 받아 온 뒤 화면을 다시 그려요. (첫 화면을 그릴 때도 쓰여서 위에 둬요)
 let fxRates = null; // { time, updated, rates: 1원당 외화 }
 let guideRoot = null; // 사용법 슬라이드 창
+let installPrompt = null; // 안드로이드 크롬·삼성 인터넷의 '앱 설치' 창 (beforeinstallprompt)
 const tipsSeen = (() => { try { return JSON.parse(localStorage.getItem('gachiga-tips') || '{}'); } catch { return {}; } })(); // 닫은 탭 팁
 const fxState = { loading: false, failAt: 0, cur: '', amount: '' };
 const wx = { for: '', days: null };
@@ -396,12 +397,32 @@ const GUIDE = [
   ['insta', '인스타 링크로 바로 담기', [['인스타 게시물·릴스 링크를 복사해', '장소를 추가할 때 붙여넣으세요.'], ['글 속 가게·장소를 찾아', '위치까지 자동으로 담아줘요.']]],
   ['route', 'DAY별 일정과 길', [['갈 곳과 시간을 적으면', 'DAY별로 정리되고 지도에 길이 이어져요.'], ['"구글맵"으로 그날 경로를 바로 열고,', '날씨도 함께 볼 수 있어요.']]],
   ['money', '정산은 자동으로', [['지출을 적을 때 통화를 고르면', '오늘 환율로 알아서 바꿔줘요.'], ['누가 누구에게 얼마 보낼지 알려주고,', '복사해서 단톡방에 붙여넣기만 하면 돼요.']]],
-  ['home', '홈 화면에 앱처럼 두기', [['주소를 칠 필요 없이', '홈 화면에서 바로 열어요.'], ['{more} → 공유 → 홈 화면에 추가,', '세 번만 누르면 돼요.']]],
+  ['home', '홈 화면에 앱처럼 두기', [['주소를 칠 필요 없이', '홈 화면에서 바로 열어요.']]], // 둘째 문단은 폰·브라우저마다 HOME_STEPS에서
 ];
-// 홈 화면 카드는 아이폰 사파리로 들어온 사람에게만 보여요. 이미 홈 화면 앱으로 열었으면 빼요.
-const canAddHome = () => /iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches;
-const guideCards = () => GUIDE.filter(([art]) => art !== 'home' || canAddHome());
-const guideLine = l => esc(l).replace('{more}', '<span class="ic-more" aria-label="더 보기 버튼"><i></i><i></i><i></i></span>');
+// 홈 화면에 추가하는 방법은 폰과 브라우저마다 달라서, 쓰는 사람 환경에 맞는 순서를 보여줘요.
+const HOME_STEPS = {
+  'ios-safari': ['{more} → 공유 → 홈 화면에 추가,', '세 번만 누르면 돼요.'],
+  'ios-chrome': ['주소창 옆 {share} → 홈 화면에 추가,', '두 번만 누르면 돼요.'],
+  'android-prompt': ['아래 버튼을 누르면', '홈 화면에 바로 추가돼요.'],
+  'android-chrome': ['{dots} → 홈 화면에 추가,', '두 번만 누르면 돼요.'],
+  'android-other': ['브라우저 메뉴에서', '\'홈 화면에 추가\'를 눌러요.'],
+};
+// 이미 홈 화면 앱으로 열었거나, 컴퓨터·카톡 같은 앱 안 브라우저면 카드를 빼요(null).
+function homePlatform() {
+  const ua = navigator.userAgent;
+  if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) return null;
+  if (/KAKAOTALK|Instagram|FBAN|FBAV|Line\/|NAVER\(inapp|DaumApps|; wv\)/i.test(ua)) return null;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // 아이패드는 맥처럼 보여요
+  if (ios) return /CriOS/.test(ua) ? 'ios-chrome' : /FxiOS|EdgiOS|OPiOS|GSA\//.test(ua) ? null : 'ios-safari';
+  if (/Android/.test(ua)) return installPrompt ? 'android-prompt' : /Chrome\//.test(ua) && !/SamsungBrowser|Whale|EdgA|OPR/.test(ua) ? 'android-chrome' : 'android-other';
+  return null;
+}
+const guideCards = () => GUIDE.filter(([art]) => art !== 'home' || homePlatform());
+const DOTS = '<i></i><i></i><i></i>';
+const guideLine = l => esc(l)
+  .replace('{more}', `<span class="ic-more" aria-label="더 보기 버튼">${DOTS}</span>`)
+  .replace('{dots}', `<span class="ic-more col" aria-label="메뉴 버튼">${DOTS}</span>`)
+  .replace('{share}', `<span class="ic-more share" aria-label="공유 버튼">${icon('share', 13)}</span>`);
 function renderGuide(allowed) {
   const show = allowed && state.guide != null;
   if (!show) { guideRoot?.remove(); guideRoot = null; return; }
@@ -419,13 +440,15 @@ function renderGuide(allowed) {
       if (next >= 0 && next < guideCards().length) { state.guide = next; render(); }
     });
   }
-  const cards = guideCards(), i = Math.min(state.guide, cards.length - 1), [art, title, text] = cards[i], last = i === cards.length - 1;
+  const cards = guideCards(), i = Math.min(state.guide, cards.length - 1), [art, title, base] = cards[i], last = i === cards.length - 1;
+  const home = art === 'home' && homePlatform(), text = home ? [...base, HOME_STEPS[home]] : base;
   guideRoot.innerHTML = `
     <div class="guide-card" role="dialog" aria-label="가치가 사용법">
       <button class="guide-skip" data-action="guide-close">${last ? '닫기' : '건너뛰기'}</button>
       <div class="guide-art"><svg viewBox="0 0 120 120" width="120" height="120" aria-hidden="true">${GART[art]}</svg></div>
       <h2 class="guide-title">${title}</h2>
-      <div class="guide-text">${text.map(lines => `<p>${lines.map(guideLine).join('<br>')}</p>`).join('')}</div>
+      <div class="guide-text">${text.map(lines => `<p>${lines.map(guideLine).join('<br>')}</p>`).join('')}
+        ${home === 'android-prompt' ? `<button class="btn-sm primary guide-install" data-action="install-app">${icon('plus', 15)} 홈 화면에 추가</button>` : ''}</div>
       <div class="guide-dots">${cards.map((_, j) => `<button class="${j === i ? 'on' : ''}" data-action="guide-go" data-i="${j}" aria-label="${j + 1}번째"></button>`).join('')}</div>
       <div class="guide-nav">
         ${i ? `<button class="btn" data-action="guide-prev">${icon('back', 18)} 이전</button>` : ''}
@@ -2438,6 +2461,14 @@ Object.assign(actions, {
   'guide-next': () => { state.guide = state.guide < guideCards().length - 1 ? state.guide + 1 : null; render(); },
   'guide-prev': () => { if (state.guide > 0) { state.guide--; render(); } },
   'guide-go': d => { state.guide = +d.i; render(); },
+  'install-app': async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice.catch(() => ({}));
+    installPrompt = null;
+    if (outcome === 'accepted') toast('홈 화면에 추가했어요');
+    render();
+  },
   'guide-close': () => { state.guide = null; render(); },
   'tip-close': d => { tipsSeen[d.id] = 1; try { localStorage.setItem('gachiga-tips', JSON.stringify(tipsSeen)); } catch {} render(); },
 });
@@ -2618,6 +2649,10 @@ async function checkVersion() {
   } catch {}
 }
 document.addEventListener('visibilitychange', checkVersion);
+
+// 안드로이드에서 설치할 수 있으면 브라우저가 알려줘요. 사용법 카드의 '홈 화면에 추가' 버튼으로 띄워요.
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (state.guide != null) render(); });
+window.addEventListener('appinstalled', () => { installPrompt = null; });
 setInterval(checkVersion, 10 * 60000);
 
 document.addEventListener('submit', e => {
