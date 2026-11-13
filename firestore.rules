@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    // 프로필은 로그인한 사람이면 볼 수 있습니다(이름·사진·아이디만 저장). 수정은 본인만.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if me() == uid && request.resource.data.get('handle', '') == '';
+      // 아이디를 바꿀 때는 handles 문서를 같은 트랜잭션에서 본인 것으로 만들어야 합니다.
+      allow update: if me() == uid && (
+        request.resource.data.get('handle', '') == resource.data.get('handle', '')
+        || getAfter(/databases/$(database)/documents/handles/$(request.resource.data.handle)).data.uid == uid
+      );
+
+      // 친구 관계는 친구 요청이 있을 때만 맺어집니다. 끊기는 어느 쪽이든 가능.
+      match /friends/{fid} {
+        allow read: if me() == uid;
+        allow create: if (me() == uid && exists(/databases/$(database)/documents/friendRequests/$(fid + '_' + uid)))
+                      || (me() == fid && exists(/databases/$(database)/documents/friendRequests/$(uid + '_' + fid)));
+        allow update: if me() == uid;
+        allow delete: if me() == uid || me() == fid;
+      }
+    }
+
+    match /handles/{handle} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == me() && handle.matches('^[a-z0-9_.]{3,20}$');
+      allow delete: if signedIn() && resource.data.uid == me();
+    }
+
+    match /friendRequests/{id} {
+      allow read: if signedIn() && (resource == null || me() == resource.data.from || me() == resource.data.to);
+      allow create: if signedIn()
+        && request.resource.data.from == me()
+        && request.resource.data.to != me()
+        && id == me() + '_' + request.resource.data.to;
+      allow delete: if signedIn() && (me() == resource.data.from || me() == resource.data.to);
+    }
+
+    match /trips/{tripId} {
+      function invited() { return resource.data.get('invitedIds', []); }
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      function isMember() { return signedIn() && me() in get(/databases/$(database)/documents/trips/$(tripId)).data.members; }
+
+      // 초대받은 사람: 자기 자신만 members로 옮길 수 있습니다.
+      function isAccepting() {
+        return me() in invited()
+          && changed().hasOnly(['members', 'memberInfo', 'invitedIds', 'invitedInfo'])
+          && request.resource.data.members.toSet() == resource.data.members.toSet().union([me()].toSet())
+          && request.resource.data.invitedIds.toSet() == invited().toSet().difference([me()].toSet())
+          && request.resource.data.memberInfo.diff(resource.data.memberInfo).affectedKeys().hasOnly([me()]);
+      }
+      function isDeclining() {
+        return me() in invited()
+          && changed().hasOnly(['invitedIds', 'invitedInfo'])
+          && request.resource.data.invitedIds.toSet() == invited().toSet().difference([me()].toSet());
+      }
+      // 캡틴이 아닌 멤버는 스스로 나갈 수 있습니다.
+      function isLeaving() {
+        return me() in resource.data.members && me() != resource.data.ownerId
+          && changed().hasOnly(['members'])
+          && request.resource.data.members.toSet() == resource.data.members.toSet().difference([me()].toSet());
+      }
+
+      allow read: if signedIn() && (me() in resource.data.members || me() in invited());
+      allow create: if signedIn()
+        && request.resource.data.ownerId == me()
+        && request.resource.data.members == [me()];
+      allow update: if signedIn() && request.resource.data.ownerId == resource.data.ownerId && (
+        me() == resource.data.ownerId
+        || (me() in resource.data.members && changed().hasOnly(['name', 'startDate', 'endDate', 'currency', 'from', 'to']))
+        || isAccepting() || isDeclining() || isLeaving()
+      );
+      allow delete: if signedIn() && resource.data.ownerId == me();
+
+      // 일정·장소·지출은 현재 멤버만. 내보내진 사람은 바로 못 봅니다.
+      match /{kind}/{itemId} {
+        allow read, write: if kind in ['events', 'places', 'expenses'] && isMember();
+      }
+    }
+  }
+}

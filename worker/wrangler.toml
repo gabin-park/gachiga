@@ -1,0 +1,13 @@
+# 같이가 인스타 분석 서버 (Cloudflare Workers 무료 요금제)
+# 올리기: cd worker && npx wrangler deploy
+name = "gachiga-ig"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# Workers AI: 무료 요금제는 하루 무료 한도를 넘으면 요청이 실패할 뿐, 돈이 나가지 않아요.
+[ai]
+binding = "AI"
+
+# 요청 결과 기록(무료 요금제 포함). 대시보드 > Workers > gachiga-ig > Logs에서 볼 수 있어요.
+[observability]
+enabled = true
