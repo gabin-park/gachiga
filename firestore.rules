@@ -72,7 +72,7 @@ service cloud.firestore {
         && request.resource.data.members == [me()];
       allow update: if signedIn() && request.resource.data.ownerId == resource.data.ownerId && (
         me() == resource.data.ownerId
-        || (me() in resource.data.members && changed().hasOnly(['name', 'startDate', 'endDate', 'currency', 'mode', 'from', 'to']))
+        || (me() in resource.data.members && changed().hasOnly(['name', 'startDate', 'endDate', 'currency', 'from', 'to']))
         || isAccepting() || isDeclining() || isLeaving()
       );
       allow delete: if signedIn() && resource.data.ownerId == me();
