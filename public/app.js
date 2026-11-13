@@ -975,9 +975,10 @@ function eventRow(e, pin) {
   const name = e.place || e.title;
   const noLoc = e.place && !eventLoc(e) && !e.placeId;
   return `
-  <div class="stop${eventLoc(e) ? ' has-go' : ''}" data-id="${esc(e.id)}">
+  <div class="stop${eventLoc(e) ? ' has-go' : ''}${pin ? ' numbered' : ''}" data-id="${esc(e.id)}">
+    ${pin ? `<b class="stop-pin" style="--c:${pin.color}">${pin.n}</b>` : ''}
     <button class="stop-card" data-action="edit-event" data-id="${esc(e.id)}">
-      <span class="stop-time">${pin ? `<b class="stop-pin" style="--c:${pin.color}">${pin.n}</b>` : ''}${timeRange(e)}</span>
+      <span class="stop-time">${timeRange(e)}</span>
       <span class="stop-title">${icon('pin', 16)} ${esc(name)}${noLoc ? ' <em class="no-loc">지도에 없음</em>' : ''}</span>
       ${e.note ? `<span class="stop-meta note">${esc(e.note)}</span>` : ''}
     </button>

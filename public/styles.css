@@ -279,6 +279,9 @@ button:active, a:active { transform: scale(.98); }
 /* 프로필과 길찾기 버튼은 카드 오른쪽에 나란히, 세로 가운데에 둬요 */
 .stop .avatar { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
 .stop .avatar { pointer-events: none; }
+/* 지도에 있는 일정은 왼쪽 타임라인 동그라미 자리에 지도 핀과 같은 번호를 넣어요 */
+.stop.numbered::before { content: none; }
+.stop > .stop-pin { position: absolute; left: -26px; top: 12px; width: 22px; height: 22px; font-size: 12px; box-shadow: 0 0 0 3px var(--bg); }
 .stop.has-go .avatar { right: 48px; }
 .stop.has-go .stop-card { padding-right: 86px; }
 .stop-go { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #e8f0fe; color: #1a73e8; }
