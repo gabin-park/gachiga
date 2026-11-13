@@ -1220,10 +1220,12 @@ const MAIN_PLACE = /^(aeroway:aerodrome|railway:station|public_transport:station
 async function geocodeOnce(q, near) {
   // 순서: 검색이 맞다고 본 순서(rank)와 거리를 같이 봐요. 거리만 보면 '시애틀 공항'에서 공항보다 가까운 렌터카가 먼저 나와요.
   // 공항·역·명소처럼 대표 장소는 올리고, 도로 이름은 내려요. 같은 이름(체인점)끼리는 가까운 곳이 위로 와요.
-  const byNear = list => near ? list
+  // 같은 이름이 500m 안에 또 있으면(역 승강장·출입구 등) 하나만 남겨요.
+  const oneEach = list => list.filter((r, i) => !list.slice(0, i).some(o => o.name === r.name && kmBetween(o, r) < 0.5));
+  const byNear = list => oneEach(near ? list
     .map(r => ({ ...r, km: kmBetween(near, r) }))
     .map(r => ({ ...r, score: r.rank * 0.5 + r.km / 3 + (/^highway:/.test(r.kind) ? 4 : 0) - (MAIN_PLACE.test(r.kind) ? 3 : 0) }))
-    .sort((a, b) => a.score - b.score).slice(0, 8) : list;
+    .sort((a, b) => a.score - b.score) : list).slice(0, 8);
   const pinned = state.places.filter(hasCoords);
   const center = near || pinned[0];
   const bias = center ? `&lat=${center.lat}&lon=${center.lng}` : '';
