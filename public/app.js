@@ -254,11 +254,6 @@ function defaultDate() {
   return t?.startDate || today;
 }
 
-function relDay(d) {
-  const n = dayDiff(todayStr(), d);
-  return n === 0 ? '오늘' : n === 1 ? '내일' : fmtDate(d);
-}
-
 let toastTimer;
 function toast(msg) {
   msg = String(msg).trim();
@@ -428,7 +423,7 @@ const GART = {
 const GUIDE = [
   ['ticket', '여행마다 항공권 한 장', [['새 여행을 만들고 날짜·공항을 적으면', '나만의 탑승권이 생겨요.'], ['출발 전엔 D-day를,', '여행 중엔 오늘이 DAY 몇인지 알려줘요.']]],
   ['friends', '친구를 태워요', [['아이디로 친구를 맺고,', '함께 갈 여행에 초대해요.'], ['친구가 수락하면', '같이 계획하고 같이 정산해요.']]],
-  ['places', '가고 싶은 곳 모으기', [['가게나 장소 이름을 검색하면', '지도에 핀이 꽂혀요.'], ['마음에 드는 곳엔 하트를 눌러요.', '하트를 많이 받은 곳이 위로 올라와요.']]],
+  ['places', '가고 싶은 곳 모으기', [['가게나 장소 이름을 검색하면', '지도에 바로 표시돼요.'], ['마음에 드는 곳엔 하트를 눌러요.', '하트를 많이 받은 곳이 위로 올라와요.']]],
   ['insta', '인스타 링크로 바로 담기', [['인스타 게시물·릴스 링크를 복사해', '장소를 추가할 때 붙여넣으세요.'], ['글 속 가게·장소를 찾아', '위치까지 자동으로 담아줘요.']]],
   ['route', 'DAY별 일정과 길', [['갈 곳과 시간을 적으면', 'DAY별로 정리되고 지도에 길이 이어져요.'], ['"구글맵"으로 그날 경로를 바로 열고,', '날씨도 함께 볼 수 있어요.']]],
   ['money', '정산은 자동으로', [['지출을 적을 때 통화를 고르면', '오늘 환율로 알아서 바꿔줘요.'], ['누가 누구에게 얼마 보낼지 알려주고,', '복사해서 단톡방에 붙여넣기만 하면 돼요.']]],
@@ -496,7 +491,7 @@ function renderGuide(allowed) {
 function tabTip() {
   const tips = {
     timeline: state.events.length >= 2 && ['순서 바꾸기와 길찾기', '일정을 꾹 누른 채 위아래로 옮기면 순서가 바뀌고, 오른쪽 화살표를 누르면 구글맵 길찾기가 열려요.'],
-    places: ['인스타 링크로 바로 담기', '릴스·게시물 링크를 복사해 붙여넣으면 장소를 자동으로 찾고 담아줘요.'],
+    places: ['인스타 링크로 바로 담기', '릴스·게시물 링크를 붙여넣으면 장소 이름과 위치를 자동으로 찾아줘요.'],
     expenses: ['외화 지출도 바로 정산돼요', '지출마다 통화를 고르면 오늘 환율로 바꿔 정산해요. 정산 내용은 복사해서 단톡방에 붙여넣기만 하면 돼요.'],
   };
   const tip = tips[state.tab];
@@ -921,7 +916,7 @@ function timelineMap(allDays, byDate) {
     </div>
     <div class="map-wrap">
       <div id="map-slot" class="map-slot" data-cls="map route-map"></div>
-      ${!all && !dayList.length ? `<div class="map-empty">${esc(dayLabel(state.mapDay))}은 아직 지도에 표시할 일정이 없어요<br><small>일정에 장소를 넣으면 핀이 꽂혀요</small></div>` : ''}
+      ${!all && !dayList.length ? `<div class="map-empty">${esc(dayLabel(state.mapDay))}은 아직 지도에 표시할 일정이 없어요<br><small>일정 장소를 후보에서 고르면 지도에 표시돼요</small></div>` : ''}
     </div>`;
 }
 
@@ -1007,7 +1002,7 @@ function viewPlaces() {
         <g transform="translate(22 30)"><path d="M8 0a8 8 0 0 1 8 8c0 6-8 14-8 14S0 14 0 8a8 8 0 0 1 8-8Z" fill="#ff7a59"/><circle cx="8" cy="8" r="3" fill="#fff"/></g>
         <g transform="translate(60 18)"><path d="M10 0a10 10 0 0 1 10 10c0 8-10 17-10 17S0 18 0 10A10 10 0 0 1 10 0Z" fill="#2f74f0"/><circle cx="10" cy="10" r="4" fill="#fff"/></g>
         <g transform="translate(44 52)"><path d="M7 0a7 7 0 0 1 7 7c0 5-7 12-7 12S0 12 0 7a7 7 0 0 1 7-7Z" fill="#8cc152"/><circle cx="7" cy="7" r="2.6" fill="#fff"/></g></svg></div>
-      <p><b>가고 싶은 곳을 모아보세요</b><br>이름으로 위치를 찾으면 지도에 핀이 꽂혀요.<br>${state.trip.members.length < 2 ? '꼭 가고 싶은 곳엔 하트를 눌러 두세요. 위로 올라와요.' : '하트를 많이 받은 곳이 위로 올라와요.'}</p>
+      <p><b>가고 싶은 곳을 모아보세요</b><br>이름으로 위치를 찾으면 지도에 표시돼요.<br>${state.trip.members.length < 2 ? '꼭 가고 싶은 곳엔 하트를 눌러 두세요. 위로 올라와요.' : '하트를 많이 받은 곳이 위로 올라와요.'}</p>
     </div>`;
   }
   state.mapPlaces = list.filter(hasCoords);
@@ -1020,7 +1015,7 @@ function viewPlaces() {
   };
   return `
     ${state.mapPlaces.length ? `<div id="map-slot" class="map-slot"></div>` : `
-      <div class="map-hint">${icon('pin', 18)}<span>장소에 위치를 넣으면 여기 지도에 핀이 꽂혀요.<br><span class="muted xsmall">장소를 눌러 수정 → 이름으로 위치 찾기</span></span></div>`}
+      <div class="map-hint">${icon('pin', 18)}<span>장소에 위치를 넣으면 여기 지도에 표시돼요.<br><span class="muted xsmall">장소를 눌러 수정 → 이름으로 위치 찾기</span></span></div>`}
     <div class="chips scroll">
       <button class="chip ${f === 'all' ? 'on' : ''}" data-action="place-filter" data-id="all">전체 ${state.places.length}</button>
       ${CATEGORIES.filter(c => counts[c.id]).map(c => `
@@ -1825,7 +1820,7 @@ function handleSheet() {
       <input name="handle" value="${esc(me().handle)}" maxlength="20" autocapitalize="off" autocomplete="off" spellcheck="false">
     </label>
     <p class="handle-status" aria-live="polite"></p>
-    <p class="muted xsmall">영문 소문자, 숫자, _ 와 . 으로 3~20자예요. 바꾸면 예전 아이디로는 나를 찾을 수 없어요.</p>
+    <p class="muted xsmall">영문 소문자, 숫자, _ 와 . 으로 3~20자예요. 바꾸면 예전 아이디로는 나를 찾을 수 없고, 다른 사람이 그 아이디를 쓸 수 있게 돼요.</p>
   `, d => {
     const handle = d.handle.trim().replace(/^@/, '').toLowerCase();
     if (!HANDLE_RE.test(handle)) return '아이디는 영문 소문자, 숫자, _ 와 . 으로\n3~20자 적어주세요';
@@ -2251,7 +2246,7 @@ function dropFarAway(found) {
 function pickPlacesSheet(url, data, found) {
   const catOf = id => CATEGORIES.find(c => c.id === id) || CATEGORIES.at(-1);
   openSheet('담을 곳 고르기', `
-    <p class="muted small ig-from">${icon('insta', 15)} ${data.author ? `@${esc(data.author)}의 게시물에서` : '게시물에서'} ${found.length}곳을 찾았어요. 빼고 싶은 곳은 체크를 끄세요.</p>
+    <p class="muted small ig-from">${icon('insta', 15)} ${data.author ? `@${esc(data.author)}의 게시물에서` : '게시물에서'} ${found.length}곳을 찾았어요. 빼고 싶은 곳은 선택을 해제하세요.</p>
     ${found.length > 5 ? `<button type="button" class="btn-sm pick-all" data-action="pick-all">${icon('check', 15)} 모두 해제</button>` : ''}
     <div class="pick-list">${found.map((c, i) => {
       const cat = catOf(c.category);
