@@ -110,11 +110,15 @@ export async function createFirebaseStore(config) {
       // 상대가 이미 나에게 요청했다면 바로 친구가 됩니다.
       const reverse = await getDoc(requestRef(them.uid, me.uid));
       if (reverse.exists()) return this.acceptFriendRequest(me, { id: reverse.id, ...reverse.data() });
+      // 이미 보낸 요청이면 다시 쓰지 않아요(규칙상 덮어쓰기가 막혀 있어 오류가 나요).
+      if ((await getDoc(requestRef(me.uid, them.uid))).exists()) return;
       await setDoc(requestRef(me.uid, them.uid), {
         from: me.uid, to: them.uid, fromInfo: card(me), toInfo: card(them), createdAt: Date.now(),
       });
     },
     async acceptFriendRequest(me, req) {
+      // 다른 기기에서 먼저 수락해 요청이 사라졌다면, 이미 친구가 된 거라 할 일이 없어요.
+      if (!(await getDoc(doc(db, 'friendRequests', req.id))).exists()) return;
       const b = writeBatch(db);
       b.set(doc(db, 'users', me.uid, 'friends', req.from), { ...card(req.fromInfo), since: Date.now() });
       b.set(doc(db, 'users', req.from, 'friends', me.uid), { ...card(me), since: Date.now() });

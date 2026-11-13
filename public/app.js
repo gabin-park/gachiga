@@ -269,7 +269,8 @@ function toast(msg) {
   toastTimer = setTimeout(() => $toast.classList.remove('show'), 2400);
 }
 function errorText(e) {
-  if (e?.code === 'permission-denied') return '접근 권한이 없어요.\n여행에서 나갔거나 내보내졌을 수 있어요.';
+  // 여행 화면에서는 대개 여행에서 나갔거나 내보내진 경우예요. 그 밖에서는 이미 처리된 일을 한 번 더 했을 때가 많아요.
+  if (e?.code === 'permission-denied') return state.tripId ? '접근 권한이 없어요.\n여행에서 나갔거나 내보내졌을 수 있어요.' : '이미 처리됐거나 지금은 할 수 없어요';
   if (e?.code === 'not-found') return '여행을 찾을 수 없어요';
   if (e?.code === 'handle-taken') return '이미 누가 쓰고 있는 아이디예요';
   const msg = String(e?.message || '');
@@ -2251,7 +2252,7 @@ function pickPlacesSheet(url, data, found) {
   const catOf = id => CATEGORIES.find(c => c.id === id) || CATEGORIES.at(-1);
   openSheet('담을 곳 고르기', `
     <p class="muted small ig-from">${icon('insta', 15)} ${data.author ? `@${esc(data.author)}의 게시물에서` : '게시물에서'} ${found.length}곳을 찾았어요. 빼고 싶은 곳은 체크를 끄세요.</p>
-    ${found.length > 5 ? `<button type="button" class="btn-sm pick-all" data-action="pick-all">${icon('check', 15)} 모두 끄기</button>` : ''}
+    ${found.length > 5 ? `<button type="button" class="btn-sm pick-all" data-action="pick-all">${icon('check', 15)} 모두 해제</button>` : ''}
     <div class="pick-list">${found.map((c, i) => {
       const cat = catOf(c.category);
       return `<label class="pick-item">
@@ -2421,7 +2422,7 @@ const actions = {
     const boxes = [...el.form.querySelectorAll('.pick-item input')];
     const on = !boxes.every(b => b.checked);
     boxes.forEach(b => { b.checked = on; });
-    el.lastChild.textContent = on ? ' 모두 끄기' : ' 모두 켜기';
+    el.lastChild.textContent = on ? ' 모두 해제' : ' 모두 선택';
   },
   'paste-link': async (d, el) => {
     let text;
@@ -2574,6 +2575,10 @@ document.addEventListener('click', e => {
   const fn = el && actions[el.dataset.action];
   if (!fn) return;
   e.preventDefault();
+  // 같은 버튼을 연달아 두 번 누르면(더블탭) 두 번째는 무시해요. 같은 요청이 두 번 가서 오류가 나지 않게요.
+  if (el.dataset.busy) return;
+  el.dataset.busy = '1';
+  setTimeout(() => delete el.dataset.busy, 600);
   fn(el.dataset, el);
 });
 
