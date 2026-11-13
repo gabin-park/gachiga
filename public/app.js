@@ -486,9 +486,9 @@ function viewLogin() {
   <main class="login">
     <div class="login-logo">${logo(96)}</div>
     <h1 class="brand">가치가</h1>
-    <p class="tagline">친구랑 같이 짜는 여행, 한 화면에서</p>
+    <p class="tagline">한 화면에서, 친구랑 같이 짜는 여행</p>
     ${IN_APP ? inAppCard() : `<form data-form="signin" class="login-form">
-      ${isDemo ? `<input name="name" placeholder="내 이름 (친구들에게 보여요)" required maxlength="20" autocomplete="nickname">` : ''}
+      ${isDemo ? `<input name="name" placeholder="내 이름" required maxlength="20" autocomplete="nickname">` : ''}
       <button class="btn primary big">${isDemo ? '출발하기' : '<span class="g">G</span> Google로 시작하기'}</button>
     </form>`}
     ${isDemo ? `<p class="demo-note">데모 모드예요. 이 브라우저에만 저장돼요. 새 탭에서 다른 이름으로 들어가면 친구 역할을 해볼 수 있어요.</p>` : ''}
