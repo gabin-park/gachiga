@@ -892,7 +892,7 @@ function timelineMap(allDays, byDate) {
     const n = allDays.indexOf(d) + 1;
     list.forEach((e, i) => {
       const loc = eventLoc(e);
-      pins.push({ lat: loc.lat, lng: loc.lng, title: e.title, html: `<b class="route-pin ${all ? 'wide' : ''}" style="--c:${DAY_COLOR}">${all ? `${n}-${i + 1}` : i + 1}</b>`, anchor: 'center', click: () => eventSheet(e) });
+      pins.push({ lat: loc.lat, lng: loc.lng, title: e.place || e.title, html: `<b class="route-pin ${all ? 'wide' : ''}" style="--c:${DAY_COLOR}">${all ? `${n}-${i + 1}` : i + 1}</b>`, anchor: 'center', click: () => eventSheet(e) });
     });
     if (list.length > 1) lines.push({ color: DAY_COLOR, pts: list.map(e => { const l = eventLoc(e); return [l.lat, l.lng]; }) });
   }
@@ -970,17 +970,18 @@ function timeRange(e) {
   return !e.time ? '시간 미정' : e.endTime ? `${esc(e.time)} – ${esc(e.endTime)}` : esc(e.time);
 }
 
-// 위치가 있는 일정은 카드 오른쪽 아래에 구글맵 길찾기 버튼이 있어요(카드를 누르면 수정).
+// 일정 카드: 장소 이름이 제목이에요(카드를 누르면 수정). 위치가 있으면 오른쪽에 구글맵 길찾기 버튼이 있어요.
 function eventRow(e, pin) {
-  // 제목이 곧 장소 이름이면 장소 줄은 같은 글이 두 번 보이지 않게 빼요 (지도에 없을 때는 알려야 하니 둬요)
+  const name = e.place || e.title;
   const noLoc = e.place && !eventLoc(e) && !e.placeId;
-  const showPlace = e.place && (e.place !== e.title || noLoc);
+  // 장소 칸이 생기기 전에 따로 적어 둔 이름(예: 센소지 구경)은 장소 아래에 작게 남겨요
+  const oldName = e.place && e.title && e.title !== e.place ? e.title : '';
   return `
   <div class="stop${eventLoc(e) ? ' has-go' : ''}" data-id="${esc(e.id)}">
     <button class="stop-card" data-action="edit-event" data-id="${esc(e.id)}">
       <span class="stop-time">${pin ? `<b class="stop-pin" style="--c:${pin.color}">${pin.n}</b>` : ''}${timeRange(e)}</span>
-      <span class="stop-title">${esc(e.title)}</span>
-      ${showPlace ? `<span class="stop-meta">${icon('pin', 13)} ${esc(e.place)}${noLoc ? ' <em class="no-loc">지도에 없음</em>' : ''}</span>` : ''}
+      <span class="stop-title">${icon('pin', 16)} ${esc(name)}${noLoc ? ' <em class="no-loc">지도에 없음</em>' : ''}</span>
+      ${oldName ? `<span class="stop-meta">${esc(oldName)}</span>` : ''}
       ${e.note ? `<span class="stop-meta note">${esc(e.note)}</span>` : ''}
     </button>
     ${avatar(e.createdBy, 'sm')}

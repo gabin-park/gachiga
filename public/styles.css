@@ -272,6 +272,7 @@ button:active, a:active { transform: scale(.98); }
 .stop-card { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); padding: 12px 50px 12px 14px; border-radius: 16px; box-shadow: var(--shadow); }
 .stop-time { display: flex; align-items: center; gap: 6px; min-height: 18px; font-size: 12px; line-height: 1; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .stop-title { font-weight: 700; }
+.stop-title > .ic { margin-right: 1px; color: var(--muted); }
 .stop-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .stop-meta.note { white-space: pre-wrap; }
 .stop-meta.note { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); } /* 메모는 점선 아래 따로 */
