@@ -974,14 +974,11 @@ function timeRange(e) {
 function eventRow(e, pin) {
   const name = e.place || e.title;
   const noLoc = e.place && !eventLoc(e) && !e.placeId;
-  // 장소 칸이 생기기 전에 따로 적어 둔 이름(예: 센소지 구경)은 장소 아래에 작게 남겨요
-  const oldName = e.place && e.title && e.title !== e.place ? e.title : '';
   return `
   <div class="stop${eventLoc(e) ? ' has-go' : ''}" data-id="${esc(e.id)}">
     <button class="stop-card" data-action="edit-event" data-id="${esc(e.id)}">
       <span class="stop-time">${pin ? `<b class="stop-pin" style="--c:${pin.color}">${pin.n}</b>` : ''}${timeRange(e)}</span>
       <span class="stop-title">${icon('pin', 16)} ${esc(name)}${noLoc ? ' <em class="no-loc">지도에 없음</em>' : ''}</span>
-      ${oldName ? `<span class="stop-meta">${esc(oldName)}</span>` : ''}
       ${e.note ? `<span class="stop-meta note">${esc(e.note)}</span>` : ''}
     </button>
     ${avatar(e.createdBy, 'sm')}
