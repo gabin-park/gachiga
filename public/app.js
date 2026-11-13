@@ -498,7 +498,7 @@ function viewLogin() {
 // 앱 안 브라우저면 로그인 버튼 대신 '사파리·크롬에서 열기' 안내를 보여줘요.
 function inAppCard() {
   const browser = IN_APP.android ? '크롬' : '사파리';
-  const menu = IN_APP.kakao ? (IN_APP.android ? '오른쪽 위 ⋮' : '오른쪽 아래 ⋯') : IN_APP.name === '인스타' ? '오른쪽 위 ⋯' : '⋯ 메뉴';
+  const menu = IN_APP.android ? '오른쪽 위 ⋮' : IN_APP.kakao ? '오른쪽 아래 ⋯' : IN_APP.name === '인스타' ? '오른쪽 위 ⋯' : '⋯ 메뉴';
   const item = IN_APP.kakao ? '다른 브라우저로 열기' : IN_APP.name === '인스타' ? '외부 브라우저에서 열기' : '브라우저로 열기';
   return `
     <div class="inapp-card">
