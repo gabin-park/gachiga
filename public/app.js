@@ -1,6 +1,6 @@
 import { store, isDemo } from './store.js';
 import { airportByCode, searchAirports, guessAirport, cityOfCode } from './airports.js';
-import { searchStops, stopCity } from './stations.js';
+import { searchStops, stopCity, stopGeo } from './stations.js';
 import { tripScene } from './scenes.js';
 
 const KINDS = ['events', 'places', 'expenses'];
@@ -636,7 +636,7 @@ const stayLabel = t => {
 function tripRoute(t) {
   if (modeOf(t) !== 'plane') {
     const mode = modeOf(t), to = t.to || cityOfCode(guessAirport(t.name)?.code) || '';
-    return { from: t.from || '', to, fromCity: stopCity(mode, t.from || ''), toCity: stopCity(mode, to) };
+    return { from: t.from || '', to, fromCity: stopCity(mode, t.from || ''), toCity: stopCity(mode, to), toGeo: stopGeo(mode, to) };
   }
   const from = t.from || '';
   const to = t.to || guessAirport(t.name)?.code || '';
@@ -1263,7 +1263,7 @@ async function tripCenter() {
     const near = pins.filter(q => kmBetween(hub, q) < 50);
     return { lat: near.reduce((s, p) => s + p.lat, 0) / near.length, lng: near.reduce((s, p) => s + p.lng, 0) / near.length };
   }
-  const city = tripRoute(state.trip || {}).toCity;
+  const r = tripRoute(state.trip || {}), city = r.toGeo || r.toCity; // 미국처럼 같은 도시 이름이 여러 곳이면 주까지 붙인 이름으로 찾아요
   if (!city) return null;
   try { cityCenters ||= JSON.parse(localStorage.getItem('gachiga-city-centers') || '{}'); } catch { cityCenters = {}; }
   if (!cityCenters[city]) {
@@ -1733,20 +1733,49 @@ const field = (label, input) => `<label class="field"><span>${label}</span>${inp
 // 여행 창의 "이동수단": 비행기 · 기차 · 고속버스 · 자동차. 고른 수단에 맞춰 출발·도착 칸이 바뀌어요.
 // 비행기는 공항, 기차는 역, 고속버스는 터미널을 검색해서 고르고, 자동차는 직접 적어요.
 const STOP_FIELD = {
-  train: ['출발역', '도착역', '역 이름 (서울, 부산, 강릉)', '기차역 이름으로 찾을 수 있어요.'],
-  bus: ['출발 터미널', '도착 터미널', '터미널이나 도시 이름', '터미널이나 도시 이름으로 찾을 수 있어요.'],
+  train: ['출발역', '도착역', '역이나 도시 이름 (부산, 시카고)', '한국·미국 주요 역은 바로 나오고, 다른 곳은 온라인에서 더 찾아요.'],
+  bus: ['출발 터미널', '도착 터미널', '터미널이나 도시 이름', '한국 터미널과 미국 주요 도시는 바로 나오고, 다른 곳은 온라인에서 더 찾아요.'],
 };
 const stopField = (kind, name, label, value) => `
   <div class="field ap-field stop-field" data-kind="${kind}">
     <span>${label}</span>
-    <div class="ap-box">${icon('search', 16)}<input class="stop-q" name="${name}" maxlength="20" placeholder="${STOP_FIELD[kind][2]}" autocomplete="off" spellcheck="false" value="${esc(value)}"></div>
+    <div class="ap-box">${icon('search', 16)}<input class="stop-q" name="${name}" maxlength="30" placeholder="${STOP_FIELD[kind][2]}" autocomplete="off" spellcheck="false" value="${esc(value)}"></div>
     <div class="ap-results"></div>
   </div>`;
+// 목록에 없는 역·터미널은 오픈스트리트맵(Photon, 무료)에서 더 찾아요.
+// 공개 서비스라 글자마다 묻지 않고, 입력을 잠깐 멈췄을 때 한 번만 물어봐요.
+const STOP_TAGS = { train: ['railway:station', 'railway:halt'], bus: ['amenity:bus_station'] };
+// 티켓에 보일 이름은 짧게: "Portland Union Station" → "Portland Union"
+const shortStop = name => name.replace(/\s*(railway station|train station|bus station|bus terminal|station|terminal|역|터미널)$/i, '').trim() || name;
+async function searchStopsOnline(kind, q) {
+  if (Date.now() < photonDownUntil) return [];
+  const tags = STOP_TAGS[kind].map(t => `&osm_tag=${t}`).join('');
+  // 한글로 찾으면 현지 이름 그대로(한국 역은 한글), 아니면 영어 이름으로 받아요(우르두어·태국어 같은 글자 대신)
+  const lang = /[가-힣]/.test(q) ? 'default' : 'en';
+  const res = await fetch(`https://photon.komoot.io/api/?limit=6&lang=${lang}&q=${encodeURIComponent(q)}${tags}`);
+  if (!res.ok) throw new Error('photon');
+  const seen = new Set();
+  return (await res.json()).features.map(f => {
+    const a = f.properties;
+    return { name: shortStop(a.name || '').slice(0, 30), full: a.name || '', city: [a.city, a.state, a.country].filter(Boolean).join(', ') };
+  }).filter(s => s.name && !seen.has(s.name + s.city) && seen.add(s.name + s.city));
+}
+let stopTimer = 0;
 function searchStopField(box) {
-  const kind = box.dataset.kind, q = box.querySelector('.stop-q').value;
-  box.querySelector('.ap-results').innerHTML = searchStops(kind, q).map(s => `
-    <button type="button" class="ap-item stop-item" data-action="stop-pick" data-name="${esc(s.name)}">${icon(kind === 'train' ? 'm_train' : 'm_bus', 18)}<span><b>${esc(s.name)}</b> ${esc(s.full)}<small>${esc(s.city)}</small></span></button>`).join('')
-    || (q.trim() ? '<p class="search-msg">목록에 없는 곳이면 이름을 그대로 적어도 돼요.</p>' : '');
+  const kind = box.dataset.kind, input = box.querySelector('.stop-q'), out = box.querySelector('.ap-results'), q = input.value.trim();
+  const item = s => `
+    <button type="button" class="ap-item stop-item" data-action="stop-pick" data-name="${esc(s.name)}">${icon(kind === 'train' ? 'm_train' : 'm_bus', 18)}<span><b>${esc(s.name)}</b> ${s.full !== s.name ? esc(s.full) : ''}<small>${esc(s.city)}</small></span></button>`;
+  const local = searchStops(kind, q), none = '<p class="search-msg">목록에 없는 곳이면 이름을 그대로 적어도 돼요.</p>';
+  const online = q.length >= 2 && local.length < 4;
+  out.innerHTML = local.map(item).join('') + (online ? '<p class="search-msg">온라인에서 더 찾는 중…</p>' : q && !local.length ? none : '');
+  clearTimeout(stopTimer);
+  if (!online) return;
+  stopTimer = setTimeout(async () => {
+    const found = await searchStopsOnline(kind, q).catch(() => { photonDownUntil = Date.now() + 60000; return []; });
+    if (!box.isConnected || input.value.trim() !== q) return; // 그사이 더 적었으면 이 결과는 버려요
+    const more = found.filter(s => !local.some(l => l.name === s.name));
+    out.innerHTML = local.map(item).join('') + more.map(item).join('') || none;
+  }, 450);
 }
 function routeBlock(mode, t) {
   const same = t && modeOf(t) === mode;
@@ -2520,6 +2549,7 @@ const actions = {
   'ap-pick': (d, el) => setAirport(el.closest('.ap-field'), d.code),
   'stop-pick': (d, el) => {
     const box = el.closest('.stop-field');
+    clearTimeout(stopTimer);
     box.querySelector('.stop-q').value = d.name;
     box.querySelector('.ap-results').innerHTML = '';
   },
