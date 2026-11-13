@@ -18,8 +18,9 @@ const IG_API = 'https://gachiga-ig.gachiga-trip.workers.dev/';
 // 인스타 게시물·릴스 링크 (첫 화면을 그릴 때 공유받은 링크를 읽느라 위쪽에 둡니다)
 const DAY_COLOR = '#3a86ff'; // 일정 지도 핀·길 색(모든 날 같은 색)
 const IG_RE = /https?:\/\/(?:www\.)?instagram\.com\/(?:[\w.]+\/)?(?:p|reels?|tv)\/([\w-]+)/i;
+// 통화 목록 순서: 원화·달러를 맨 위에 둬요 (모든 통화 고르기 화면이 이 순서를 따라요)
 const CURRENCIES = [
-  ['KRW', '한국 원'], ['JPY', '일본 엔'], ['USD', '미국 달러'], ['EUR', '유로'], ['TWD', '대만 달러'], ['THB', '태국 바트'],
+  ['KRW', '한국 원'], ['USD', '미국 달러'], ['JPY', '일본 엔'], ['EUR', '유로'], ['TWD', '대만 달러'], ['THB', '태국 바트'],
   ['VND', '베트남 동'], ['CNY', '중국 위안'], ['HKD', '홍콩 달러'], ['SGD', '싱가포르 달러'], ['PHP', '필리핀 페소'],
   ['GBP', '영국 파운드'], ['AUD', '호주 달러'], ['CAD', '캐나다 달러'], ['CHF', '스위스 프랑'], ['MYR', '말레이시아 링깃'],
 ];
@@ -261,13 +262,15 @@ function relDay(d) {
 
 let toastTimer;
 function toast(msg) {
+  msg = String(msg).trim();
+  if (!/[.!?…]$/.test(msg)) msg += '.'; // 알림 문장 끝 마침표를 한곳에서 맞춰요 (두 줄이면 줄마다 마침표)
   $toast.textContent = msg;
   $toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $toast.classList.remove('show'), 2400);
 }
 function errorText(e) {
-  if (e?.code === 'permission-denied') return '접근 권한이 없어요.\n여행에서 나갔거나 내보내졌을 수 있어요';
+  if (e?.code === 'permission-denied') return '접근 권한이 없어요.\n여행에서 나갔거나 내보내졌을 수 있어요.';
   if (e?.code === 'not-found') return '여행을 찾을 수 없어요';
   if (e?.code === 'handle-taken') return '이미 누가 쓰고 있는 아이디예요';
   const msg = String(e?.message || '');
@@ -970,7 +973,7 @@ function eventRow(e, pin) {
       ${e.note ? `<span class="stop-meta note">${esc(e.note)}</span>` : ''}
     </button>
     ${avatar(e.createdBy, 'xs')}
-    ${eventLoc(e) ? `<a class="stop-go" href="${esc(gmapsToUrl(e))}" target="_blank" rel="noopener" aria-label="구글맵으로 길찾기">${icon('nav', 16)}</a>` : ''}
+    ${eventLoc(e) ? `<a class="stop-go" href="${esc(gmapsToUrl(e))}" target="_blank" rel="noopener" aria-label="구글맵으로 길찾기">${icon('nav', 12)}</a>` : ''}
   </div>`;
 }
 
@@ -2417,7 +2420,7 @@ const actions = {
     run(() => store.addItem(state.tripId, 'expenses', {
       kind: 'transfer', title: '정산 송금', amount, currency: currency(), date: todayStr(),
       paidBy: d.from, splitAmong: [d.to], createdBy: state.user.uid,
-    }), `${memberName(d.from)} → ${memberName(d.to)}\n보낸 걸로 기록했어요`);
+    }), `${memberName(d.from)} → ${memberName(d.to)}\n보낸 걸로 기록했어요.`);
   },
   'undo-sent': d => run(() => store.removeItem(state.tripId, 'expenses', d.id), '보낸 기록을 지웠어요'),
   'copy-settle': () => {
@@ -2440,7 +2443,7 @@ const actions = {
       '',
       mixed && fxRates ? `${fxWhen()} 환율 기준 · 가치가` : '가치가',
     ].join('\n');
-    copyText(text, '정산 내용을 복사했어요.\n함께 간 친구에게 알려주세요');
+    copyText(text, '정산 내용을 복사했어요.\n함께 간 친구에게 알려주세요.');
   },
   'set-currency': d => {
     if (d.id === currency()) return closeSheet();
