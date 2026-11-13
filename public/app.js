@@ -221,7 +221,9 @@ function avatarOf(info, uid, cls = '') {
 }
 const avatar = (uid, cls) => avatarOf(state.trip?.memberInfo?.[uid], uid, cls);
 
-function personRow(p, actions = '') {
+function personRow(info, actions = '') {
+  // 친구 목록엔 친구가 된 때의 이름·아이디가 저장돼 있어요. 나중에 아이디를 바꿨을 수 있으니 지금 프로필로 덮어 보여줘요.
+  const p = { ...info, ...live(info.uid) };
   return `
   <div class="person">
     ${avatarOf(p, p.uid, 'md')}
