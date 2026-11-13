@@ -972,12 +972,15 @@ function timeRange(e) {
 
 // 위치가 있는 일정은 카드 오른쪽 아래에 구글맵 길찾기 버튼이 있어요(카드를 누르면 수정).
 function eventRow(e, pin) {
+  // 제목이 곧 장소 이름이면 장소 줄은 같은 글이 두 번 보이지 않게 빼요 (지도에 없을 때는 알려야 하니 둬요)
+  const noLoc = e.place && !eventLoc(e) && !e.placeId;
+  const showPlace = e.place && (e.place !== e.title || noLoc);
   return `
   <div class="stop" data-id="${esc(e.id)}">
     <button class="stop-card" data-action="edit-event" data-id="${esc(e.id)}">
       <span class="stop-time">${pin ? `<b class="stop-pin" style="--c:${pin.color}">${pin.n}</b>` : ''}${timeRange(e)}</span>
       <span class="stop-title">${esc(e.title)}</span>
-      ${e.place ? `<span class="stop-meta">${icon('pin', 13)} ${esc(e.place)}${!eventLoc(e) && !e.placeId ? ' <em class="no-loc">지도에 없음</em>' : ''}</span>` : ''}
+      ${showPlace ? `<span class="stop-meta">${icon('pin', 13)} ${esc(e.place)}${noLoc ? ' <em class="no-loc">지도에 없음</em>' : ''}</span>` : ''}
       ${e.note ? `<span class="stop-meta note">${esc(e.note)}</span>` : ''}
     </button>
     ${avatar(e.createdBy, 'sm')}
@@ -1841,7 +1844,7 @@ function eventSheet(e = {}, { fixedDay = false } = {}) {
       : field('날짜', `<input type="date" name="date" value="${esc(e.date)}">`);
   openSheet(e.id ? '일정 수정' : '일정 추가', `
     ${fixedDay && e.date ? dayField : ''}
-    ${field('무엇을 할까요', `<input name="title" required maxlength="60" placeholder="예: 도톤보리에서 저녁" value="${esc(e.title)}">`)}
+    ${field('무엇을 할까요', `<input name="title" maxlength="60" placeholder="예: 도톤보리에서 저녁" value="${esc(e.title)}">`)}
     ${fixedDay && e.date ? '' : dayField}
     <div class="row">
       ${field('시작', `<input type="time" name="time" value="${esc(e.time)}">`)}
@@ -1858,12 +1861,13 @@ function eventSheet(e = {}, { fixedDay = false } = {}) {
     </div>
     ${field('메모', `<textarea name="note" rows="2" maxlength="300" placeholder="예약번호, 준비물 등">${esc(e.note)}</textarea>`)}
   `, (d, form) => {
-    if (!d.title.trim()) return '무엇을 할지 적어주세요';
+    // 할 일을 비워 두고 장소만 적으면, 그 장소에 가는 일정으로 보고 장소 이름을 제목으로 써요
+    if (!d.title.trim() && !d.place.trim()) return '무엇을 할지나 장소 중\n하나는 적어주세요';
     if (d.endTime && !d.time) return '끝나는 시간을 넣으려면\n시작 시간도 정해주세요';
     if (d.endTime && d.endTime <= d.time) return '끝나는 시간이 시작보다 늦어야 해요';
     const place = d.place.trim();
     const linked = state.places.find(p => p.name === place);
-    const data = { title: d.title.trim(), date: d.date || '', time: d.time, endTime: d.endTime || '', place, placeId: linked?.id || '', note: d.note.trim() };
+    const data = { title: d.title.trim() || place, date: d.date || '', time: d.time, endTime: d.endTime || '', place, placeId: linked?.id || '', note: d.note.trim() };
     // 확인은 바로 하고(틀리면 시트에 남아요), 위치 찾기와 저장은 시트를 닫은 뒤에 이어서 해요.
     // 날짜나 시간을 바꾸면 끌어서 정한 순서는 풀고, 시간에 맞는 자리로 가요.
     if (e.id && (data.date !== (e.date || '') || data.time !== (e.time || ''))) data.order = null;
