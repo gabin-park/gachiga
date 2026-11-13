@@ -207,8 +207,8 @@ function live(uid) {
 
 // 사진이 없을 때 동그라미에 넣는 글자: 한글 이름은 성을 빼고 두 글자(박가빈 → 가빈), 영어 이름은 머리글자 두 개(Gabin Park → GP)
 function avatarText(name) {
-  const chars = [...name.trim()];
-  if (/^[가-힣]+$/.test(name.trim())) return chars.length >= 3 ? chars.slice(-2).join('') : chars.join('');
+  const chars = [...name.trim()], hangul = name.replace(/\s+/g, ''); // "박 가빈"처럼 띄어 써도 한글 이름으로 봐요
+  if (/^[가-힣]+$/.test(hangul)) return hangul.length >= 3 ? hangul.slice(-2) : hangul;
   const words = name.trim().split(/\s+/).filter(Boolean);
   return (words.length > 1 ? words[0][0] + words[1][0] : chars.slice(0, 2).join('')).toUpperCase();
 }
