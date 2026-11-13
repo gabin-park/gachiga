@@ -2424,7 +2424,7 @@ const actions = {
       '',
       mixed && fxRates ? `${fxWhen()} 환율 기준 · 가치가` : '가치가',
     ].join('\n');
-    copyText(text, '정산 내용을 복사했어요.\n친구에게 알려주세요');
+    copyText(text, '정산 내용을 복사했어요.\n함께 간 친구에게 알려주세요');
   },
   'set-currency': d => {
     if (d.id === currency()) return closeSheet();
