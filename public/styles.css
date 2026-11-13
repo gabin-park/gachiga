@@ -20,6 +20,7 @@
   --minus: #e5484d;
   --red: #d64545;           /* 디데이·비행기 */
   --band: #13294b;          /* 항공권 윗띠 */
+  --band-tex: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27320%27%20height=%27320%27%3E%3Cfilter%20id=%27f%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%27.012%20.35%27%20numOctaves=%273%27%20seed=%277%27%20stitchTiles=%27stitch%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%201%200%200%200%200%201%200%200%200%200%201%200%200%200%200.16%20-0.056%27/%3E%3C/filter%3E%3Cfilter%20id=%27s%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%27.8%27%20numOctaves=%272%27%20stitchTiles=%27stitch%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%201%200%200%200%200%201%200%200%200%200%201%20-0.09%200%200%200.09%200%27/%3E%3C/filter%3E%3Crect%20width=%27100%25%27%20height=%27100%25%27%20filter=%27url%28%23f%29%27/%3E%3Crect%20width=%27100%25%27%20height=%27100%25%27%20filter=%27url%28%23s%29%27/%3E%3C/svg%3E"); /* 남색 띠의 종이 결 */
   --radius: 18px;
   --shadow: 0 1px 2px rgba(19, 41, 75, .05), 0 6px 18px rgba(19, 41, 75, .06);
   --glow: 0 8px 20px rgba(19, 41, 75, .18);
@@ -201,7 +202,7 @@ button:active, a:active { transform: scale(.98); }
                 radial-gradient(circle 8px at calc(100% - var(--stub)) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
 }
 .ticket-main { flex: 1; min-width: 0; background: var(--paper); border-radius: 14px 0 0 14px; overflow: hidden; }
-.ticket-band { display: flex; align-items: center; gap: 7px; padding: 8px 14px; background: var(--band); color: #fff; font: 600 9px/1 var(--mono); letter-spacing: .2em; }
+.ticket-band { display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; background: var(--band-tex), var(--band); color: #fff; font: 600 9px/1 var(--mono); letter-spacing: .2em; }
 .ticket-band .logo { border-radius: 4px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .3); }
 .ticket-band em { margin-left: auto; font-style: normal; color: #9cc3ff; letter-spacing: .14em; }
 .route-row { display: flex; align-items: flex-end; gap: 8px; padding: 12px 14px 0; }
@@ -225,9 +226,11 @@ button:active, a:active { transform: scale(.98); }
 .ticket-wait { margin: -4px 14px 10px; font-size: 12px; color: var(--primary); font-weight: 600; }
 .ticket-stub {
   width: var(--stub); flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px;
-  padding: 8px 0; border-radius: 0 14px 14px 0; overflow: hidden;
-  background: var(--paper); border-left: 1.5px dashed var(--line-strong);
+  padding: 0 0 8px; border-radius: 0 14px 14px 0; overflow: hidden;
+  background: var(--paper); border-left: 2px dashed #a99d86;
 }
+/* 꼬리 위쪽도 본문 띠와 같은 높이로 이어져서, 절취선이 띠까지 자르고 지나가요. */
+.stub-band { align-self: stretch; flex: none; height: 32px; background: var(--band-tex), var(--band); }
 .pass-stamp { margin: auto 0; width: 68px; height: 68px; overflow: visible; color: var(--red); }
 .pass-stamp text { fill: currentColor; text-anchor: middle; }
 .ps-top { font: 800 9.5px var(--body); }
@@ -235,6 +238,82 @@ button:active, a:active { transform: scale(.98); }
 .ticket.now .pass-stamp { color: var(--primary); }
 .ticket.past .pass-stamp, .ticket.tbd .pass-stamp { color: var(--muted); }
 .ticket.past { opacity: .62; }
+/* ---------- 비행기가 아닌 여행 티켓 ---------- */
+.mode-ticket { display: block; margin-bottom: 14px; color: inherit; text-decoration: none; }
+.mode-ticket.past { opacity: .62; }
+.mode-ticket .ticket-wait { margin: 8px 4px 0; }
+.mc { --card-shadow: 0 6px 14px rgba(19, 41, 75, .14); }
+.mc h1, .mc span[class$="-name"] { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc .avatars .avatar { box-shadow: 0 0 0 1.5px #fff; }
+.mc-stay { font-weight: 700; }
+
+/* 기차: 역 출발 안내판(글자판이 넘어가요) */
+.flap { padding: 12px 14px 14px; border-radius: 14px; background: #161616; color: #f6f1e1; box-shadow: var(--card-shadow); }
+.flap-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; font: 700 10px/1 var(--mono, 'Courier Prime', monospace); letter-spacing: .18em; color: #a8a8a8; }
+.flap-hd span:first-child { flex: none; }
+.flap-name { min-width: 0; font: 700 16px/1.2 var(--display) !important; letter-spacing: 0; color: #f6f1e1; }
+.flap-cells { display: flex; gap: 3px; }
+.flap-c { position: relative; flex: 1; max-width: 34px; height: 44px; display: grid; place-items: center; border-radius: 4px; background: linear-gradient(#2c2c2c 50%, #232323 50%); font-size: 23px; font-weight: 800; overflow: hidden; perspective: 200px; }
+.flap-c::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: #0b0b0b; z-index: 2; }
+.flap-c i { position: absolute; left: 0; right: 0; top: 0; height: 50%; background: #333; transform-origin: bottom; opacity: 0; z-index: 1; }
+.flap-c.go i { animation: flap .09s linear; }
+.flap-c.y { color: #f6c945; }
+@keyframes flap { from { transform: rotateX(0); opacity: 1; } to { transform: rotateX(-90deg); opacity: 1; } }
+.flap-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #333; }
+.flap-grid > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.flap-grid small { font: 700 9px/1 'Courier Prime', monospace; letter-spacing: .15em; color: #888; }
+.flap-grid b { font: 700 14px/1.2 'Courier Prime', monospace; color: #f6c945; white-space: nowrap; }
+.flap-grid .mc-stay { font-family: var(--body); color: #f6f1e1; }
+
+/* 전철: 승강장 역 이름판(가운데가 도착역) */
+.stn { padding: 14px 0 12px; border-radius: 14px; background: #fbfbf8; box-shadow: var(--card-shadow), inset 0 0 0 1px #e2e2dc; overflow: hidden; color: #2a2a2a; }
+.stn-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 16px; }
+.stn-name { min-width: 0; font: 700 17px/1.2 var(--display) !important; }
+.stn-dd { flex: none; font: 700 12px 'Courier Prime', monospace; color: #2e9e5b; }
+.stn-bar { position: relative; height: 32px; margin: 16px 0 10px; display: flex; align-items: center; padding: 0 14px; background: #2e9e5b; color: #fff; font-size: 13px; font-weight: 700; }
+.stn-from { max-width: 22%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.1; }
+.stn-from small { display: block; font-size: 10px; opacity: .85; }
+.stn-pill { position: absolute; left: 50%; top: 50%; max-width: 54%; transform: translate(-50%, -50%); padding: 6px 24px; border: 4px solid #2e9e5b; border-radius: 99px; background: #fff; color: #222; font-size: 24px; font-weight: 800; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
+.stn-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; font: 700 12px 'Courier Prime', monospace; color: #666; }
+.stn-foot .mc-stay { font-family: var(--body); color: #2a2a2a; }
+
+/* 버스: 앞유리 행선지 전광판(아랫줄이 흘러가요) */
+.led { padding: 10px; border-radius: 16px; background: #2b2d31; box-shadow: var(--card-shadow); }
+.led-screen { position: relative; padding: 12px 14px; border-radius: 6px; background: #0c0c0c; color: #ff9d2e; text-shadow: 0 0 8px rgba(255, 157, 46, .6); overflow: hidden; }
+.led-screen::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle, transparent 55%, rgba(12, 12, 12, .55) 75%) 0 0 / 3px 3px; pointer-events: none; }
+.led-big { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 800; }
+.led-big b { font-size: 32px; line-height: 1.15; }
+.led-run { margin-top: 4px; overflow: hidden; white-space: nowrap; font-size: 14px; font-weight: 700; }
+.led-run span { display: inline-block; padding-left: 100%; animation: led-run 12s linear infinite; }
+@keyframes led-run { to { transform: translateX(-100%); } }
+.led-plate { display: flex; align-items: center; gap: 10px; padding: 8px 6px 0; color: #e4e4e4; }
+.led-name { flex: 1; min-width: 0; font: 700 16px/1.2 var(--display) !important; }
+.led-date { flex: none; font: 700 12px 'Courier Prime', monospace; color: #a8a8a8; }
+
+/* 자동차: 고속도로 표지판 */
+.sign { padding: 6px; border-radius: 14px; background: #0f6b3d; box-shadow: var(--card-shadow); color: #fff; }
+.sign-in { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; border: 2.5px solid #fff; border-radius: 9px; }
+.sign-arrow { width: 34px; height: 46px; fill: #fff; }
+.sign-dest b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 32px; font-weight: 800; line-height: 1.1; }
+.sign-dest small { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; opacity: .9; }
+.sign-shield { min-width: 50px; padding: 9px 6px 14px; background: #1d4f9c; clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%); text-align: center; font-size: 14px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+.sign-sub { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 7px 12px; border-radius: 7px; background: #7a4a24; }
+.sign-name { flex: 1; min-width: 0; font: 700 16px/1.2 var(--display) !important; }
+.sign-date { flex: none; font: 700 12px 'Courier Prime', monospace; opacity: .9; }
+
+@media (prefers-reduced-motion: reduce) { .led-run span { animation: none; padding-left: 0; } }
+
+/* 여행 화면 위쪽: 비행기가 아닌 여행 */
+.trip-mode { margin-top: 14px; }
+.trip-mode-crew { margin-top: 10px; }
+
+/* 여행 창: 이동수단 */
+.mode-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mode-btn { display: grid; justify-items: center; gap: 4px; padding: 10px 0 8px; border: 0; border-radius: 12px; background: var(--bg); color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.mode-btn.on { background: var(--ink); color: #fff; }
+.mode-sub { display: flex; gap: 6px; margin-top: 8px; }
+.mode-sub .chip { border: 0; font: inherit; font-size: 13px; font-weight: 700; }
+
 .code-input { font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; }
 
 /* ---------- 일정 ---------- */

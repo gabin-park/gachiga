@@ -47,6 +47,9 @@ const HANDLE_RE = /^[a-z0-9_.]{3,20}$/;
 
 // 선으로 그린 아이콘 (24×24, currentColor)
 const ICONS = {
+  m_plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+  m_car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+  m_transit: '<path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15-1-1"/><path d="m15 15 1-1"/><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"/><path d="m8 19-2 3"/><path d="m16 19 2 3"/>',
   cat_food: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
   cat_cafe: '<path d="M10 2v2"/><path d="M14 2v2"/><path d="M6 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>',
   cat_sight: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
@@ -628,6 +631,10 @@ const stayLabel = t => {
 
 // 출발 → 도착. 출발은 사용자가 정한 공항만, 도착을 안 정했으면 여행 이름에 든 도시로 짐작합니다("시애틀 먹방" → SEA).
 function tripRoute(t) {
+  if (modeOf(t) !== 'plane') {
+    const to = t.to || cityOfCode(guessAirport(t.name)?.code) || '';
+    return { from: t.from || '', to, fromCity: t.from || '', toCity: to };
+  }
   const from = t.from || '';
   const to = t.to || guessAirport(t.name)?.code || '';
   return { from, to, fromCity: cityOfCode(from), toCity: cityOfCode(to) };
@@ -676,18 +683,118 @@ function passStamp(t, s) {
   </svg>`;
 }
 
+// --- 이동수단별 티켓 ---
+// 비행기는 탑승권, 나머지는 그 수단에서 실제로 보는 표·물건 모양으로 그려요.
+// mode가 없는 예전 여행은 모두 비행기예요.
+const MODES = { plane: '비행기', car: '자동차', train: '기차', subway: '전철', bus: '버스' };
+const TRANSIT = ['train', 'subway', 'bus'];
+const modeOf = t => MODES[t?.mode] ? t.mode : 'plane';
+const dotDate = s => { const d = parseDate(s); return `${d.getMonth() + 1}.${d.getDate()}`; };
+const tripDates = t => !t.startDate ? '날짜 미정' : !t.endDate || t.endDate === t.startDate ? dotDate(t.startDate) : `${dotDate(t.startDate)}–${dotDate(t.endDate)}`;
+
+// 기차 전광판: 몇 초마다 글자판이 넘어가며 경로 → 상태 → 날짜를 번갈아 보여줘요.
+let flapTick = 0;
+const FLAP_MAX = 9;
+function flapMsgs(t) {
+  const r = tripRoute(t), s = tripStatus(t);
+  return [`${r.from || '출발'}→${r.to || '도착'}`, s.kind === 'soon' ? `출발 ${s.label}` : s.label, t.startDate ? dotDate(t.startDate) : '']
+    .filter(Boolean).map(m => [...m].slice(0, FLAP_MAX));
+}
+const flapCell = ch => `<span class="flap-c${ch === '→' ? ' y' : ''}"><span>${esc(ch)}</span><i></i></span>`;
+function flapCells(t) {
+  const msgs = flapMsgs(t), n = Math.max(...msgs.map(m => m.length));
+  const now = msgs[flapTick % msgs.length];
+  return `<div class="flap-cells" data-msgs="${esc(JSON.stringify(msgs))}">${Array.from({ length: n }, (_, i) => flapCell(now[i] || ' ')).join('')}</div>`;
+}
+const FLAP_POOL = '가나다라마바사아자차카타파하0123456789';
+function flipBoard(el) {
+  const msgs = JSON.parse(el.dataset.msgs), next = msgs[flapTick % msgs.length];
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  [...el.children].forEach((cell, i) => {
+    const target = next[i] || ' ', text = cell.firstChild;
+    if (text.textContent === target) return;
+    let left = still ? 0 : 3 + i;
+    const step = () => {
+      const ch = left-- > 0 ? FLAP_POOL[Math.floor(Math.random() * FLAP_POOL.length)] : target;
+      cell.classList.remove('go'); void cell.offsetWidth; cell.classList.add('go');
+      setTimeout(() => { text.textContent = ch; cell.classList.toggle('y', ch === '→'); }, 45);
+      if (left >= 0) setTimeout(step, 90);
+    };
+    step();
+  });
+}
+// 화면에 보이는 전광판만 넘겨요(배터리 아끼기).
+setInterval(() => {
+  if (document.hidden) return;
+  const boards = [...document.querySelectorAll('.flap-cells')].filter(el => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
+  if (!boards.length) return;
+  flapTick++;
+  boards.forEach(flipBoard);
+}, 4000);
+
+// 비행기가 아닌 여행 카드. last: 끝 칸에 넣을 [이름, 내용] (홈은 일행, 여행 화면은 일정 길이)
+function modeCard(t, { heading = false, last }) {
+  const tag = heading ? 'h1' : 'span';
+  const r = tripRoute(t), s = tripStatus(t);
+  const name = cls => `<${tag} class="${cls}">${esc(t.name)}</${tag}>`;
+  const dday = s.kind === 'tbd' ? '날짜 미정' : s.label;
+  const from = esc(r.from || '출발지 미정'), to = esc(r.to || '도착지 미정');
+  switch (modeOf(t)) {
+    case 'train': return `
+    <div class="mc flap">
+      <div class="flap-hd"><span>DEPARTURES · 출발</span>${name('flap-name')}</div>
+      ${flapCells(t)}
+      <div class="flap-grid">
+        <div><small>DATE</small><b>${tripDates(t)}</b></div>
+        <div><small>${last[0]}</small>${last[1]}</div>
+        <div><small>STATUS</small><b>${dday}</b></div>
+      </div>
+    </div>`;
+    case 'subway': return `
+    <div class="mc stn">
+      <div class="stn-top">${name('stn-name')}<span class="stn-dd">${dday}</span></div>
+      <div class="stn-bar"><span class="stn-from"><small>출발</small>← ${from}</span><span class="stn-pill">${to}</span></div>
+      <div class="stn-foot"><span>${tripDates(t)}</span>${last[1]}</div>
+    </div>`;
+    case 'bus': return `
+    <div class="mc led">
+      <div class="led-screen">
+        <div class="led-big"><b>${to}</b> 행</div>
+        <div class="led-run"><span>${from} 출발 · ${s.kind === 'soon' ? '출발까지 ' : ''}${dday} · ${esc(t.name)}</span></div>
+      </div>
+      <div class="led-plate">${name('led-name')}<span class="led-date">${tripDates(t)}</span>${last[1]}</div>
+    </div>`;
+    default: return `
+    <div class="mc sign">
+      <div class="sign-in">
+        <svg class="sign-arrow" viewBox="0 0 40 52" aria-hidden="true"><path d="M20 2 36 20H26V50H14V20H4Z"/></svg>
+        <div class="sign-dest"><b>${to}</b><small>${from}에서 출발</small></div>
+        <div class="sign-shield">${dday}</div>
+      </div>
+      <div class="sign-sub">${name('sign-name')}<span class="sign-date">${tripDates(t)}</span>${last[1]}</div>
+    </div>`;
+  }
+}
+
 function ticket(t) {
   const s = tripStatus(t);
   const crew = `<span class="avatars">${t.members.slice(0, 4).map(uid => avatarOf(t.memberInfo?.[uid], uid, 'xs')).join('')}</span>`;
+  const wait = (t.invitedIds || []).length && isOwner(t) ? `<div class="ticket-wait">${t.invitedIds.length}명 수락 대기 중</div>` : '';
+  if (modeOf(t) !== 'plane') return `
+  <a class="mode-ticket ${s.kind}" href="#/trip/${esc(t.id)}">
+    ${modeCard(t, { last: ['CREW', crew] })}
+    ${wait}
+  </a>`;
   return `
   <a class="ticket ${s.kind}" href="#/trip/${esc(t.id)}">
     <div class="ticket-main">
       <div class="ticket-band">${logo(16)}<span>BOARDING PASS</span>${isOwner(t) ? '<em>CAPTAIN</em>' : ''}</div>
       ${routeRow(t)}
       ${ticketFields(t, ['CREW', crew])}
-      ${(t.invitedIds || []).length && isOwner(t) ? `<div class="ticket-wait">${t.invitedIds.length}명 수락 대기 중</div>` : ''}
+      ${wait}
     </div>
     <div class="ticket-stub">
+      <div class="stub-band"></div>
       ${passStamp(t, s)}
     </div>
   </a>`;
@@ -777,6 +884,12 @@ function viewTrip() {
   const alone = t.members.length < 2;
   const pending = (t.invitedIds || []).length;
   const body = state.tab === 'timeline' ? viewTimeline() : state.tab === 'places' ? viewPlaces() : viewExpenses();
+  const crewRow = `
+        <button class="crew" data-action="members">
+          <span class="avatars">${t.members.slice(0, 5).map(uid => avatar(uid, 'sm')).join('')}</span>
+          <span class="crew-count">멤버 ${t.members.length}${pending ? ` · 대기 ${pending}` : ''}</span>
+        </button>
+        ${owner ? `<button class="crew-add" data-action="members">${icon('userPlus', 16)} 멤버 추가</button>` : ''}`;
   return `
   <header class="hero trip-hero">
     <div class="hero-bar">
@@ -784,20 +897,19 @@ function viewTrip() {
       <span class="hero-chip">${s.label}</span>
       <button class="hero-icon" data-action="trip-settings" aria-label="여행 설정">${icon('more', 22)}</button>
     </div>
+    ${modeOf(t) === 'plane' ? `
     <section class="trip-pass">
       <div class="tp-top">
         <div class="ticket-band"><a href="#/" class="home-logo" aria-label="내 여행으로">${logo(16)}</a><span>BOARDING PASS</span>${owner ? '<em>CAPTAIN</em>' : ''}</div>
         ${routeRow(t, { heading: true })}
         ${ticketFields(t, ['STAY', `<span class="f-val">${stayLabel(t)}</span>`])}
       </div>
-      <div class="tp-bottom hero-crew">
-        <button class="crew" data-action="members">
-          <span class="avatars">${t.members.slice(0, 5).map(uid => avatar(uid, 'sm')).join('')}</span>
-          <span class="crew-count">멤버 ${t.members.length}${pending ? ` · 대기 ${pending}` : ''}</span>
-        </button>
-        ${owner ? `<button class="crew-add" data-action="members">${icon('userPlus', 16)} 멤버 추가</button>` : ''}
-      </div>
-    </section>
+      <div class="tp-bottom hero-crew">${crewRow}</div>
+    </section>` : `
+    <section class="trip-mode">
+      ${modeCard(t, { heading: true, last: ['STAY', `<b class="mc-stay">${stayLabel(t)}</b>`] })}
+      <div class="trip-mode-crew hero-crew">${crewRow}</div>
+    </section>`}
   </header>
   <main class="page with-nav">
     ${tabTip()}
@@ -1154,7 +1266,7 @@ async function tripCenter() {
     const near = pins.filter(q => kmBetween(hub, q) < 50);
     return { lat: near.reduce((s, p) => s + p.lat, 0) / near.length, lng: near.reduce((s, p) => s + p.lng, 0) / near.length };
   }
-  const city = cityOfCode(tripRoute(state.trip || {}).to);
+  const city = tripRoute(state.trip || {}).toCity;
   if (!city) return null;
   try { cityCenters ||= JSON.parse(localStorage.getItem('gachiga-city-centers') || '{}'); } catch { cityCenters = {}; }
   if (!cityCenters[city]) {
@@ -1621,6 +1733,32 @@ function searchAirportField(box) {
 
 const field = (label, input) => `<label class="field"><span>${label}</span>${input}</label>`;
 
+// 여행 창의 "이동수단": 비행기 · 자동차 · 대중교통(기차 · 전철 · 버스). 고른 수단에 맞춰 출발·도착 칸이 바뀌어요.
+const ROUTE_HINT = {
+  car: ['서울', '강릉'], train: ['서울역', '부산역'], subway: ['홍대입구', '성수'], bus: ['서울 고속터미널', '전주'],
+};
+function routeBlock(mode, t) {
+  const same = t && modeOf(t) === mode;
+  const group = TRANSIT.includes(mode) ? 'transit' : mode;
+  const btn = (g, label, ic) => `<button type="button" class="mode-btn${group === g ? ' on' : ''}" data-action="pick-mode" data-mode="${g === 'transit' ? (TRANSIT.includes(mode) ? mode : 'train') : g}">${icon(ic, 22)}${label}</button>`;
+  const fields = mode === 'plane' ? `
+    ${airportField('from', '출발 공항', same ? t.from || '' : '')}
+    ${airportField('to', '도착 공항', same && t.to ? t.to : guessAirport(t?.name)?.code || '', same && t.to ? '' : 'auto')}
+    <p class="muted xsmall">탑승권에 보여요. 도시나 공항 이름(시애틀, 하네다, seattle)이나 코드(SEA)로 찾을 수 있어요. 도착을 비워 두면 여행 이름에 든 도시로 채워요.</p>` : `
+    <div class="row">
+      ${field('출발지', `<input name="from" maxlength="20" placeholder="${ROUTE_HINT[mode][0]}" value="${esc(same ? t.from : '')}">`)}
+      ${field('도착지', `<input name="to" maxlength="20" placeholder="${ROUTE_HINT[mode][1]}" value="${esc(same ? t.to : '')}">`)}
+    </div>
+    <p class="muted xsmall">${MODES[mode]} 티켓에 보여요. 도착지는 날씨를 찾을 때도 써요.</p>`;
+  return `
+    <input type="hidden" name="mode" value="${mode}">
+    <div class="field"><span>이동수단</span>
+      <div class="mode-pick">${btn('plane', '비행기', 'm_plane')}${btn('car', '자동차', 'm_car')}${btn('transit', '대중교통', 'm_transit')}</div>
+      ${group === 'transit' ? `<div class="mode-sub">${TRANSIT.map(m => `<button type="button" class="chip${m === mode ? ' on' : ''}" data-action="pick-mode" data-mode="${m}">${MODES[m]}</button>`).join('')}</div>` : ''}
+    </div>
+    ${fields}`;
+}
+
 function tripSheet(t) {
   const owner = t && isOwner(t);
   openSheet(t ? '여행 설정' : '새 여행', `
@@ -1629,15 +1767,16 @@ function tripSheet(t) {
       ${field('가는 날', `<input type="date" name="startDate" value="${esc(t?.startDate)}">`)}
       ${field('오는 날', `<input type="date" name="endDate" value="${esc(t?.endDate)}">`)}
     </div>
-    ${airportField('from', '출발 공항', t?.from || '')}
-    ${airportField('to', '도착 공항', t?.to || guessAirport(t?.name)?.code || '', t?.to ? '' : 'auto')}
-    <p class="muted xsmall">항공권에 보여요. 도시나 공항 이름(시애틀, 하네다, seattle)이나 코드(SEA)로 찾을 수 있어요. 도착을 비워 두면 여행 이름에 든 도시로 채워요.</p>
+    <div class="route-block" data-trip="${esc(t?.id || '')}">${routeBlock(modeOf(t), t)}</div>
     ${t ? `<p class="muted xsmall">${owner ? '캡틴은 여행을 삭제할 수 있어요. 삭제하면 모든 멤버에게서 사라져요.' : '여행에서 나가면 다시 초대받기 전까지 볼 수 없어요.'}</p>` : ''}
   `, d => {
     if (!d.name.trim()) return '여행 이름을 적어주세요.';
     if (d.startDate && d.endDate && d.endDate < d.startDate) return '오는 날이 가는 날보다 빨라요.';
     const code = v => String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const data = { name: d.name.trim(), startDate: d.startDate, endDate: d.endDate || d.startDate, from: code(d.from), to: code(d.to) };
+    const mode = MODES[d.mode] ? d.mode : 'plane';
+    const place = v => String(v || '').trim().slice(0, 20);
+    const pick = mode === 'plane' ? code : place;
+    const data = { name: d.name.trim(), startDate: d.startDate, endDate: d.endDate || d.startDate, mode, from: pick(d.from), to: pick(d.to) };
     if (t) return store.updateTrip(t.id, data);
     const { id, done } = store.createTrip(me(), data);
     location.hash = `#/trip/${id}`;
@@ -2116,7 +2255,7 @@ let autoLocTimer;
 // 한 곳이면 장소 시트를 바로 채우고, 여러 곳이면 체크 목록에서 골라 저장해요.
 // 서버가 없거나 실패하면 시트에 남아 게시물을 보며 이름을 적으면 돼요(반자동).
 async function analyzeInstagram(url, onStep) {
-  const dest = cityOfCode(tripRoute(state.trip || {}).to); // AI가 도시를 짐작하도록 여행지를 알려줘요
+  const dest = tripRoute(state.trip || {}).toCity; // AI가 도시를 짐작하도록 여행지를 알려줘요
   let data;
   try {
     const res = await fetch(`${IG_API}?url=${encodeURIComponent(url)}&trip=${encodeURIComponent(dest)}`);
@@ -2366,6 +2505,13 @@ const actions = {
   'place-detail': d => placeDetail(d.id),
   'geo-search': (d, el) => searchPlaceLocation(el.form),
   'ap-pick': (d, el) => setAirport(el.closest('.ap-field'), d.code),
+  'pick-mode': (d, el) => {
+    const block = el.closest('.route-block');
+    // 자동차 ↔ 대중교통처럼 둘 다 글자로 적는 칸이면 적어 둔 출발·도착을 그대로 옮겨요.
+    const typed = block.querySelector('input[name=from]:not([type=hidden])') && [block.querySelector('[name=from]').value, block.querySelector('[name=to]').value];
+    block.innerHTML = routeBlock(d.mode, state.trips.find(x => x.id === block.dataset.trip));
+    if (typed && d.mode !== 'plane') [block.querySelector('[name=from]').value, block.querySelector('[name=to]').value] = typed;
+  },
   'geo-pick': (d, el) => {
     const r = geoResults[+d.id];
     if (r) { el.form.dataset.autoLoc = ''; setPlaceLocation(el.form, r); }
