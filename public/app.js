@@ -27,6 +27,13 @@ const CURRENCIES = [
 let fxRates = null; // { time, updated, rates: 1원당 외화 }
 let guideRoot = null; // 사용법 슬라이드 창
 let installPrompt = null; // 안드로이드 크롬·삼성 인터넷의 '앱 설치' 창 (beforeinstallprompt)
+// 카톡·인스타처럼 앱 안에서 열린 브라우저. 구글이 여기선 로그인을 막아요.
+const IN_APP = (() => {
+  const ua = navigator.userAgent, android = /Android/.test(ua);
+  const name = /KAKAOTALK/i.test(ua) ? '카톡' : /Instagram/.test(ua) ? '인스타' : /FBAN|FBAV|FB_IAB/.test(ua) ? '페이스북'
+    : /Line\//.test(ua) ? '라인' : /NAVER\(inapp|DaumApps|everytimeApp/.test(ua) || (android && /; wv\)/.test(ua)) ? '이 앱' : '';
+  return name ? { name, android, kakao: name === '카톡' } : null;
+})();
 const tipsSeen = (() => { try { return JSON.parse(localStorage.getItem('gachiga-tips') || '{}'); } catch { return {}; } })(); // 닫은 탭 팁
 const fxState = { loading: false, failAt: 0, cur: '', amount: '' };
 const wx = { for: '', days: null };
@@ -480,12 +487,33 @@ function viewLogin() {
     <div class="login-logo">${logo(96)}</div>
     <h1 class="brand">가치가</h1>
     <p class="tagline">친구랑 같이 짜는 여행, 한 화면에서</p>
-    <form data-form="signin" class="login-form">
+    ${IN_APP ? inAppCard() : `<form data-form="signin" class="login-form">
       ${isDemo ? `<input name="name" placeholder="내 이름 (친구들에게 보여요)" required maxlength="20" autocomplete="nickname">` : ''}
       <button class="btn primary big">${isDemo ? '출발하기' : '<span class="g">G</span> Google로 시작하기'}</button>
-    </form>
+    </form>`}
     ${isDemo ? `<p class="demo-note">데모 모드예요. 이 브라우저에만 저장돼요. 새 탭에서 다른 이름으로 들어가면 친구 역할을 해볼 수 있어요.</p>` : ''}
   </main>`;
+}
+
+// 앱 안 브라우저면 로그인 버튼 대신 '사파리·크롬에서 열기' 안내를 보여줘요.
+function inAppCard() {
+  const browser = IN_APP.android ? '크롬' : '사파리';
+  const menu = IN_APP.kakao ? (IN_APP.android ? '오른쪽 위 ⋮' : '오른쪽 아래 ⋯') : IN_APP.name === '인스타' ? '오른쪽 위 ⋯' : '⋯ 메뉴';
+  const item = IN_APP.kakao ? '다른 브라우저로 열기' : IN_APP.name === '인스타' ? '외부 브라우저에서 열기' : '브라우저로 열기';
+  return `
+    <div class="inapp-card">
+      <b>${browser}에서 열어 주세요</b>
+      <p>${IN_APP.name} 안에서는 구글 로그인이 막혀 있어요.</p>
+      <ol class="inapp-steps"><li><i>1</i> <span>${menu} 누르기</span></li><li><i>2</i> <span>'${item}' 누르기</span></li></ol>
+      ${IN_APP.kakao || IN_APP.android ? `<button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>` : ''}
+      <button class="btn block" data-action="copy-site">${icon('copy', 18)} 링크 복사하기</button>
+    </div>`;
+}
+// 카톡은 바깥 브라우저로 여는 기능을 주고, 안드로이드는 크롬으로 바로 넘길 수 있어요.
+function openOutside() {
+  const url = location.href;
+  if (IN_APP.kakao) location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+  else if (IN_APP.android) location.href = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
 }
 
 function viewOnboarding() {
@@ -2461,6 +2489,12 @@ Object.assign(actions, {
   'guide-next': () => { state.guide = state.guide < guideCards().length - 1 ? state.guide + 1 : null; render(); },
   'guide-prev': () => { if (state.guide > 0) { state.guide--; render(); } },
   'guide-go': d => { state.guide = +d.i; render(); },
+  'open-outside': () => openOutside(),
+  'copy-site': async () => {
+    const url = location.href;
+    try { await navigator.clipboard.writeText(url); toast(`링크를 복사했어요. ${IN_APP?.android ? '크롬' : '사파리'} 주소창에 붙여넣어 주세요.`); }
+    catch { prompt('이 링크를 복사해 주세요', url); }
+  },
   'install-app': async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
@@ -2649,6 +2683,13 @@ async function checkVersion() {
   } catch {}
 }
 document.addEventListener('visibilitychange', checkVersion);
+
+// 카톡·안드로이드 앱 안에서 열렸으면 처음 한 번 바로 바깥 브라우저로 넘겨요.
+if (IN_APP && (IN_APP.kakao || IN_APP.android)) {
+  let tried = false;
+  try { tried = !!sessionStorage.getItem('gachiga-outside'); sessionStorage.setItem('gachiga-outside', '1'); } catch {}
+  if (!tried) openOutside();
+}
 
 // 안드로이드에서 설치할 수 있으면 브라우저가 알려줘요. 사용법 카드의 '홈 화면에 추가' 버튼으로 띄워요.
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (state.guide != null) render(); });
