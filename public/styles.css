@@ -408,6 +408,9 @@ textarea { resize: none; }
   white-space: pre-line; line-height: 1.45;  /* 문구 속 \n에서 줄을 바꿔요 */
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* 입력 시트가 열려 있으면 칸을 가리지 않게 화면 위쪽에 띄워요 */
+#sheet-root.open ~ #toast { top: calc(20px + env(safe-area-inset-top)); bottom: auto; transform: translate(-50%, -16px); }
+#sheet-root.open ~ #toast.show { transform: translate(-50%, 0); }
 
 /* ---------- 아이콘 & 작은 버튼 ---------- */
 .ic { flex-shrink: 0; vertical-align: -0.2em; }
