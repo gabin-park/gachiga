@@ -156,9 +156,7 @@ button:active, a:active { transform: scale(.98); }
 .inapp-card { width: 100%; max-width: 330px; margin-top: 28px; display: grid; gap: 8px; padding: 18px 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); text-align: left; }
 .inapp-card > b { font-size: 16px; color: var(--ink); }
 .inapp-card > p { margin: 0 0 4px; font-size: 14px; line-height: 1.6; color: var(--muted); }
-.inapp-steps { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; color: var(--ink); }
-.inapp-steps li { display: flex; gap: 8px; align-items: center; }
-.inapp-steps i { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); font-style: normal; font-size: 12px; font-weight: 800; }
+.inapp-card > .inapp-help { margin: 4px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
 .notice { background: var(--primary-soft); color: var(--primary); padding: 10px 14px; border-radius: 14px; font-size: 14px; font-weight: 700; margin-top: 20px; }
 .g { font-weight: 900; background: #fff; color: #4285f4; width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; }
 

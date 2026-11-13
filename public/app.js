@@ -498,22 +498,21 @@ function viewLogin() {
 // 앱 안 브라우저면 로그인 버튼 대신 '사파리·크롬에서 열기' 안내를 보여줘요.
 function inAppCard() {
   const browser = IN_APP.android ? '크롬' : '사파리';
-  const menu = IN_APP.android ? '오른쪽 위 ⋮' : IN_APP.kakao ? '오른쪽 아래 ⋯' : IN_APP.name === '인스타' ? '오른쪽 위 ⋯' : '⋯ 메뉴';
-  const item = IN_APP.kakao ? '다른 브라우저로 열기' : IN_APP.name === '인스타' ? '외부 브라우저에서 열기' : '브라우저로 열기';
   return `
     <div class="inapp-card">
       <b>${browser}에서 열어 주세요</b>
-      <p>${IN_APP.name} 안에서는 구글 로그인이 막혀 있어요.</p>
-      <ol class="inapp-steps"><li><i>1</i> <span>${menu} 누르기</span></li><li><i>2</i> <span>'${item}' 누르기</span></li></ol>
-      ${IN_APP.kakao || IN_APP.android ? `<button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>` : ''}
-      <button class="btn block" data-action="copy-site">${icon('copy', 18)} 링크 복사하기</button>
+      <p>이 화면에서는 구글 로그인이 막혀 있어요.</p>
+      <button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>
+      <p class="inapp-help">안 열리나요? <button class="tip-link" data-action="copy-site">링크 복사하기</button></p>
     </div>`;
 }
 // 카톡은 바깥 브라우저로 여는 기능을 주고, 안드로이드는 크롬으로 바로 넘길 수 있어요.
+// 아이폰의 다른 앱은 사파리 주소(x-safari-)로 시도하고, 막히면 링크 복사로 옮겨요.
 function openOutside() {
   const url = location.href;
   if (IN_APP.kakao) location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
   else if (IN_APP.android) location.href = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  else location.href = 'x-safari-' + url;
 }
 
 function viewOnboarding() {
