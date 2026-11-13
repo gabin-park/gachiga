@@ -707,11 +707,17 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 .sent-undo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--muted); }
 
 /* 환율 계산기 */
-.fx-row { display: flex; gap: 8px; align-items: center; }
-.fx-row input { flex: 1; min-width: 0; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.fx-row select { flex: none; width: 46%; }
-.fx-unit { flex: none; width: 46%; font-size: 14px; font-weight: 700; color: var(--muted); padding-left: 4px; }
-.fx-eq { display: grid; place-items: center; height: 28px; color: var(--primary); }
+/* 환율 계산기: 위아래 두 칸(통화는 왼쪽, 숫자는 오른쪽) 사이에 위아래 화살표 */
+.fx-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px 10px 10px; border-radius: 14px; background: var(--bg); border: 1.5px solid transparent; }
+.fx-row:focus-within { border-color: var(--primary); background: var(--surface); }
+.fx-row input { flex: 1; min-width: 0; padding: 0; border: 0 !important; background: transparent !important; text-align: right; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fx-cur { position: relative; flex: none; display: inline-flex; align-items: center; height: 34px; border-radius: 99px; background: var(--primary-soft); color: var(--primary-deep); font-size: 13px; font-weight: 800; }
+.fx-cur select { height: 34px; padding: 0 28px 0 12px; border: 0; border-radius: 99px; background: transparent; color: inherit; font: inherit; -webkit-appearance: none; appearance: none; }
+.fx-cur .ic { position: absolute; right: 10px; pointer-events: none; }
+.fx-cur.krw { padding: 0 12px; background: var(--surface); color: var(--muted); }
+.fx-eq { position: relative; z-index: 1; display: flex; justify-content: center; height: 0; }
+.fx-eq span { display: grid; place-items: center; width: 32px; height: 32px; margin-top: -16px; border-radius: 50%; background: var(--surface); color: var(--primary); box-shadow: 0 0 0 1.5px var(--line-strong); }
+.fx-eq + .fx-row { margin-top: 6px; }
 .fx-rate { margin: 10px 2px 0; }
 
 /* DAY 옆 날씨 */

@@ -85,6 +85,7 @@ const ICONS = {
   drop: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   swap: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
+  updown: '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>',
   nav: '<path d="M3 11 22 2l-9 19-2-8-8-2Z"/>',
   pin: '<path d="M20 10c0 5-5.5 10.2-7.4 11.8a1 1 0 0 1-1.2 0C9.5 20.2 4 15 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
   insta: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".5" fill="currentColor"/>',
@@ -489,7 +490,7 @@ function renderGuide(allowed) {
 // 탭마다 처음 한 번만 뜨는 작은 팁. ✕를 누르면 이 기기에선 다시 안 떠요(본 팁은 tipsSeen에 적어 둬요).
 function tabTip() {
   const tips = {
-    timeline: state.events.length >= 2 && ['순서 바꾸기와 길찾기', '일정을 꾹 누른 채 끌면 순서가 바뀌고, 오른쪽 화살표를 누르면 구글맵 길찾기가 열려요.'],
+    timeline: state.events.length >= 2 && ['순서 바꾸기와 길찾기', '일정을 꾹 누른 채 위아래로 옮기면 순서가 바뀌고, 오른쪽 화살표를 누르면 구글맵 길찾기가 열려요.'],
     places: ['인스타 링크로 바로 담기', '릴스·게시물 링크를 복사해 붙여넣으면 장소를 자동으로 찾고 담아줘요.'],
     expenses: ['외화 지출도 바로 정산돼요', '지출마다 통화를 고르면 오늘 환율로 바꿔 정산해요. 정산 내용은 복사해서 단톡방에 붙여넣기만 하면 돼요.'],
   };
@@ -1453,13 +1454,16 @@ function fxCard() {
   <section class="card fx-card">
     <h2 class="section-title">환율 계산기</h2>
     <div class="fx-row">
-      <input data-fx="amount" type="number" inputmode="decimal" min="0" placeholder="0" value="${esc(fxState.amount)}">
-      <select data-fx="cur" aria-label="통화">${CURRENCIES.filter(([c]) => c !== 'KRW').map(([c, label]) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${label}</option>`).join('')}</select>
+      <label class="fx-cur">
+        <select data-fx="cur" aria-label="통화">${CURRENCIES.filter(([c]) => c !== 'KRW').map(([c, label]) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c} ${label}</option>`).join('')}</select>
+        ${icon('chevronDown', 14)}
+      </label>
+      <input data-fx="amount" type="number" inputmode="decimal" min="0" placeholder="0" aria-label="외화 금액" value="${esc(fxState.amount)}">
     </div>
-    <div class="fx-eq">${icon('swap', 16)}</div>
+    <div class="fx-eq" aria-hidden="true"><span>${icon('updown', 16)}</span></div>
     <div class="fx-row">
-      <input data-fx="krw" type="number" inputmode="numeric" min="0" placeholder="0" value="${krw != null ? Math.round(krw) : ''}">
-      <span class="fx-unit">한국 원</span>
+      <span class="fx-cur krw">KRW 한국 원</span>
+      <input data-fx="krw" type="number" inputmode="numeric" min="0" placeholder="0" aria-label="원화 금액" value="${krw != null ? Math.round(krw) : ''}">
     </div>
     <p class="muted xsmall fx-rate">${fxRateText(cur)}</p>
   </section>`;
