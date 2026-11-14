@@ -1192,14 +1192,99 @@ function roadPath(a, b) {
 // 못 찾으면 끝말을 띄어 한 번 더 찾아봅니다.
 const PLACE_SUFFIX = /(타워|역|공원|신사|시장|거리|성|사원|절|해변|비치|공항|호텔|카페|박물관|미술관|전망대|온천|다리|섬|폭포|동물원|수족관|스카이트리|몰|백화점)$/;
 async function geocode(q, near) {
-  const found = await geocodeOnce(q, near);
+  let found = await geocodeOnce(q, near);
   const spaced = !/\s/.test(q) && PLACE_SUFFIX.test(q) && q.replace(PLACE_SUFFIX, ' $1');
-  if (found.length || !spaced) return found;
-  await new Promise(r => setTimeout(r, 1000)); // 오픈스트리트맵 검색은 1초에 한 번까지
-  return geocodeOnce(spaced, near);
+  if (!found.length && spaced) {
+    await new Promise(r => setTimeout(r, 1000)); // 오픈스트리트맵 검색은 1초에 한 번까지
+    found = await geocodeOnce(spaced, near);
+  }
+  // 해외 장소를 한국어로 적었는데 여행지 근처에서(여행지를 모르면 아예) 못 찾으면, 현지 표기·영어 이름으로 바꿔서 한 번 더 찾아요.
+  // 지도 검색은 유명한 곳 말고는 한국어 이름을 몰라요. 가까운 결과가 있으면 그것만, 없으면 찾은 것 전부를 보여줘요.
+  // 이름이 비슷하기만 한 곳(예: '시부야' → 경주의 '시부걸')은 찾은 것으로 치지 않아요.
+  const words = q.split(/\s+/).filter(w => w.length >= 2);
+  const sameName = r => words.some(w => r.name.replace(/\s/g, '').includes(w));
+  if (/[가-힣]/.test(q) && !found.some(r => sameName(r) && (!near || r.km < 300))) {
+    const local = await localNames(q);
+    const search = async at => {
+      let list = [];
+      for (const name of local.names) list.push(...await geocodeOnce(name, at).catch(() => []));
+      list = list.filter((r, i) => !list.slice(0, i).some(o => o.name === r.name && kmBetween(o, r) < 0.5));
+      return { list, close: at ? list.filter(r => r.km < 300) : list };
+    };
+    // 여행지(또는 지금 보는 지도) 근처에서 먼저 찾고, 없으면 AI가 알려준 도시 근처에서 찾아요.
+    // 기준이 없으면 다른 도시의 같은 이름(체인점·동네)이 먼저 나와요.
+    let hit = near ? await search(near) : { list: [], close: [] };
+    if (!hit.close.length) {
+      const city = await cityCenter(local.city);
+      if (city || !near) hit = await search(city);
+    }
+    if (hit.list.length) found = (hit.close.length ? hit.close : hit.list).slice(0, 8);
+  }
+  return found;
 }
 
-// 여행지 한가운데: 이미 꽂힌 핀이 가장 많이 모인 곳. 핀이 없으면 도착 공항 좌표, 목록에 없는 공항이면 도시를 한 번 찾아 기억해 둬요.
+// 한국어 장소 이름 → { names: 현지 표기와 영어 이름, city: 그 장소의 도시(영어) } (가치가 서버의 무료 AI).
+// 한 번 바꾼 이름은 이 폰에 기억해 둬요.
+let localNameMemo = null;
+async function localNames(q) {
+  if (!IG_API) return { names: [], city: '' };
+  const trip = tripRoute(state.trip || {}).toCity, key = `${trip}|${q}`;
+  try { localNameMemo ||= JSON.parse(localStorage.getItem('gachiga-local-names-v2') || '{}'); } catch { localNameMemo = {}; }
+  if (localNameMemo[key]) return localNameMemo[key];
+  const res = await fetch(`${IG_API}?tr=${encodeURIComponent(q)}&trip=${encodeURIComponent(trip)}`).catch(() => null);
+  const data = res?.ok ? await res.json().catch(() => ({})) : {};
+  const out = { names: (data.names || []).slice(0, 2), city: data.city || '' };
+  if (out.names.length) {
+    localNameMemo[key] = out;
+    const keys = Object.keys(localNameMemo);
+    keys.slice(0, Math.max(0, keys.length - 300)).forEach(k => delete localNameMemo[k]); // 오래된 것부터 300개만 남겨요
+    try { localStorage.setItem('gachiga-local-names-v2', JSON.stringify(localNameMemo)); localStorage.removeItem('gachiga-local-names'); } catch {}
+  }
+  return out;
+}
+// 위치 검색 후보 한 줄. 현지어 이름은 koreanize가 나중에 한국어로 바꿔 넣어요.
+const geoItem = (r, action, id) => `
+  <button type="button" class="geo-item" data-action="${action}" data-id="${id}">
+    ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small><span class="geo-addr">${esc(r.address)}</span></small></span>
+  </button>`;
+// 해외 후보(한글이 하나도 없는 후보)는 어느 나라든 AI로 한국어 이름과 주소를 받아 바꿔 보여줘요.
+// 원래 이름은 아래에 작게 남겨요(현지에서 간판 찾을 때). 실패하면 그냥 현지어 그대로 둬요.
+const FOREIGN = { test: text => !/[가-힣]/.test(text) };
+let koMemo = null;
+const koOf = r => koMemo?.[`${r.name}\t${r.address}`];
+async function koreanize($box, list) {
+  const key = r => `${r.name}\t${r.address}`;
+  // v2: 주소를 코드로 맞추게 바꿔서, 동네·번지가 빠진 예전 기억은 버려요
+  try { koMemo ||= JSON.parse(localStorage.getItem('gachiga-ko-labels-v2') || '{}'); } catch { koMemo = {}; }
+  const todo = [...new Set(list.filter(r => FOREIGN.test(r.name + r.address) && !koMemo[key(r)]).map(key))].slice(0, 8);
+  if (todo.length && IG_API) {
+    const res = await fetch(`${IG_API}?ko=${encodeURIComponent(todo.join('\n'))}`).catch(() => null);
+    const items = res?.ok ? (await res.json().catch(() => ({}))).items || [] : [];
+    todo.forEach((k, i) => { if (items[i]?.name) koMemo[k] = items[i]; });
+    const keys = Object.keys(koMemo);
+    keys.slice(0, Math.max(0, keys.length - 500)).forEach(k => delete koMemo[k]); // 오래된 것부터 500개만 남겨요
+    try { localStorage.setItem('gachiga-ko-labels-v2', JSON.stringify(koMemo)); localStorage.removeItem('gachiga-ko-labels'); } catch {}
+  }
+  if (!$box.isConnected) return;
+  $box.querySelectorAll('.geo-item[data-id]').forEach(btn => {
+    const r = list[btn.dataset.id], ko = r && koMemo[key(r)];
+    if (!ko || btn.querySelector('.geo-orig')) return;
+    btn.querySelector('b').textContent = ko.name;
+    if (ko.area) btn.querySelector('.geo-addr').textContent = ko.area;
+    if (ko.name !== r.name) btn.querySelector('small').insertAdjacentHTML('afterend', `<small class="geo-orig">${esc(r.name)}</small>`);
+  });
+}
+
+// 영어 도시 이름 → 도시 한가운데 (Open-Meteo 도시 검색, 무료)
+async function cityCenter(name) {
+  if (!name) return null;
+  const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name=${encodeURIComponent(name)}`).catch(() => null);
+  const [c] = (res?.ok && (await res.json()).results) || [];
+  return c ? { lat: c.latitude, lng: c.longitude } : null;
+}
+
+// 여행지 한가운데: 이미 꽂힌 핀이 가장 많이 모인 곳. 핀이 없으면 도착 도시의 한가운데예요.
+// 공항은 도시에서 멀 때가 많아서(나리타·간사이 등) 도시를 한 번 찾아 기억해 두고, 못 찾을 때만 공항 좌표를 써요.
 let cityCenters = null;
 async function tripCenter() {
   const pins = [...state.places, ...state.events].filter(hasCoords).map(p => ({ lat: +p.lat, lng: +p.lng }));
@@ -1209,23 +1294,22 @@ async function tripCenter() {
     return { lat: near.reduce((s, p) => s + p.lat, 0) / near.length, lng: near.reduce((s, p) => s + p.lng, 0) / near.length };
   }
   const to = tripRoute(state.trip || {}).to;
-  const atAirport = airportCoords(to); // 목록에 있는 공항이면 공항 좌표를 그대로 써요
-  if (atAirport) return atAirport;
   const city = cityOfCode(to);
-  if (!city) return null;
-  // 예전 기억(v1)에는 '도쿄' → 서울의 식당처럼 엉뚱한 곳이 섞여 있어서 새 이름으로 다시 찾아요
-  try { cityCenters ||= JSON.parse(localStorage.getItem('gachiga-city-centers-v2') || '{}'); } catch { cityCenters = {}; }
+  if (!city) return airportCoords(to);
+  // v3부터 목록에 있는 공항도 도시를 찾아 둬요(예전 기억은 목록에 없는 공항만 있어서 버려요)
+  try { cityCenters ||= JSON.parse(localStorage.getItem('gachiga-city-centers-v3') || '{}'); } catch { cityCenters = {}; }
   if (!cityCenters[city]) {
-    // 도시 이름 전용 검색(Open-Meteo, 무료)이라 가게 이름에 걸리지 않아요
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=ko&name=${encodeURIComponent(city)}`).catch(() => null);
-    const [c] = (res?.ok && (await res.json()).results) || [];
-    if (!c) return null;
+    // 도시 이름 전용 검색(Open-Meteo, 무료)이라 가게 이름에 걸리지 않아요. 나라가 맞는 도시만 써요(같은 이름의 다른 나라 도시 피하기).
+    const country = airportByCode(to)?.country;
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=5&language=ko&name=${encodeURIComponent(city)}`).catch(() => null);
+    const list = (res?.ok && (await res.json()).results) || [];
+    const c = list.find(r => !country || r.country === country);
+    if (!c) return airportCoords(to);
     cityCenters[city] = { lat: c.latitude, lng: c.longitude };
-    try { localStorage.setItem('gachiga-city-centers-v2', JSON.stringify(cityCenters)); localStorage.removeItem('gachiga-city-centers'); } catch {}
+    try { localStorage.setItem('gachiga-city-centers-v3', JSON.stringify(cityCenters)); localStorage.removeItem('gachiga-city-centers-v2'); } catch {}
   }
   return cityCenters[city];
 }
-const fmtKm = km => km < 1 ? `${Math.round(km * 1000)}m` : km < 100 ? `${km.toFixed(1)}km` : `${Math.round(km)}km`;
 
 // Photon이 안 될 때는 잠깐 건너뛰고, 대신 쓰는 Nominatim은 규칙대로 1초에 한 번만 물어봐요.
 let photonDownUntil = 0;
@@ -1261,7 +1345,8 @@ async function geocodeOnce(q, near) {
         lat: f.geometry.coordinates[1],
         lng: f.geometry.coordinates[0],
         name: a.name || q,
-        address: [a.street && `${a.street}${a.housenumber ? ' ' + a.housenumber : ''}`, a.district, a.city, a.state, a.country].filter(Boolean).join(', '),
+        // 동네 이름(locality, 예: 渋谷二丁目)이 있으면 넣어요. 같은 체인점을 동네로 구분할 수 있게. 숫자만 있는 건 빼요.
+        address: [a.street && `${a.street}${a.housenumber ? ' ' + a.housenumber : ''}`, !/^\d+$/.test(a.locality || '') && a.locality, a.district, a.city !== a.district && a.city, a.state, a.country].filter(Boolean).join(', '),
       };
     });
     if (found.length) return byNear(found);
@@ -1457,12 +1542,36 @@ function fxWhen() {
   const d = new Date(fxRates.updated);
   return `${fmtShort(toDateStr(d))} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-const fxStep = cur => 10 ** -formatter(cur).resolvedOptions().maximumFractionDigits;
+// 금액 칸: 숫자와 소수점만 받아서 세 자리마다 쉼표를 찍어요(10000 → 10,000).
+// 소수점 아래는 그 돈의 단위만큼만(원·엔은 없음, 달러·유로는 2자리). 글자나 기호는 적는 순간 빠져요.
+const fracDigits = cur => formatter(cur).resolvedOptions().maximumFractionDigits;
+function cleanAmount(text, cur) {
+  const t = String(text ?? '').replace(/[^\d.]/g, '');
+  const [int = '', ...rest] = t.split('.');
+  const head = int.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fracDigits(cur) && t.includes('.') ? `${head || '0'}.${rest.join('').slice(0, fracDigits(cur))}` : head;
+}
+const amountNum = v => Number(String(v ?? '').replace(/,/g, '')) || 0;
+// 쉼표를 넣고 빼도 커서가 같은 숫자 뒤에 머물게 해요.
+function formatMoneyInput(el, cur) {
+  const before = el.value, caret = el.selectionStart ?? before.length;
+  const digitsBefore = before.slice(0, caret).replace(/[^\d.]/g, '').length;
+  const after = cleanAmount(before, cur);
+  if (after === before) return;
+  el.value = after;
+  let pos = 0;
+  for (let n = 0; pos < after.length && n < digitsBefore; pos++) if (/[\d.]/.test(after[pos])) n++;
+  try { el.setSelectionRange(pos, pos); } catch {}
+}
+const moneyCur = el => el.dataset.fx === 'krw' ? 'KRW'
+  : el.dataset.fx === 'amount' ? el.closest('.fx-card').querySelector('[data-fx=cur]').value
+  : el.form?.cur?.value || currency();
 // 지출 기록 창의 금액 아래 안내: 원이 아니면 원으로, 원이면 지금 보는 돈으로 환산해 보여줘요.
 function amountHint(amount, cur) {
-  if (!(+amount > 0)) return '';
+  amount = amountNum(amount);
+  if (!(amount > 0)) return '';
   const to = cur === 'KRW' ? currency() : 'KRW';
-  const v = to === cur ? null : conv(+amount, cur, to);
+  const v = to === cur ? null : conv(amount, cur, to);
   return v != null ? '약 ' + formatter(to).format(roundFx(v, to)) : '';
 }
 function toKRW(n, cur) { return fxRates?.rates?.[cur] ? n / fxRates.rates[cur] : null; }
@@ -1481,7 +1590,7 @@ const roundFx = (n, cur) => { const d = formatter(cur).resolvedOptions().maximum
 function fxCard() {
   const cur = fxState.cur || (currency() !== 'KRW' ? currency() : 'USD');
   fxState.cur = cur;
-  const krw = fxState.amount !== '' ? toKRW(+fxState.amount, cur) : null;
+  const krw = fxState.amount !== '' ? toKRW(amountNum(fxState.amount), cur) : null;
   return `
   <section class="card fx-card">
     <h2 class="section-title">환율 계산기</h2>
@@ -1490,12 +1599,12 @@ function fxCard() {
         <select data-fx="cur" aria-label="통화">${CURRENCIES.filter(([c]) => c !== 'KRW').map(([c, label]) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c} ${label}</option>`).join('')}</select>
         ${icon('chevronDown', 14)}
       </label>
-      <input data-fx="amount" type="number" inputmode="decimal" min="0" placeholder="0" aria-label="외화 금액" value="${esc(fxState.amount)}">
+      <input data-fx="amount" class="money-in" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="외화 금액" value="${esc(cleanAmount(fxState.amount, cur))}">
     </div>
     <div class="fx-eq" aria-hidden="true"><span>${icon('updown', 16)}</span></div>
     <div class="fx-row">
       <span class="fx-cur krw">KRW 한국 원</span>
-      <input data-fx="krw" type="number" inputmode="numeric" min="0" placeholder="0" aria-label="원화 금액" value="${krw != null ? Math.round(krw) : ''}">
+      <input data-fx="krw" class="money-in" type="text" inputmode="numeric" autocomplete="off" placeholder="0" aria-label="원화 금액" value="${krw != null ? cleanAmount(Math.round(krw), 'KRW') : ''}">
     </div>
     <p class="muted xsmall fx-rate">${fxRateText(cur)}</p>
   </section>`;
@@ -1506,11 +1615,12 @@ function onFxInput(el) {
   const $amt = card.querySelector('[data-fx=amount]'), $krw = card.querySelector('[data-fx=krw]');
   fxState.cur = cur;
   if (el.dataset.fx === 'krw') {
-    const v = fromKRW(+$krw.value, cur);
-    $amt.value = $krw.value === '' || v == null ? '' : roundFx(v, cur);
+    const v = fromKRW(amountNum($krw.value), cur);
+    $amt.value = $krw.value === '' || v == null ? '' : cleanAmount(String(roundFx(v, cur)), cur);
   } else {
-    const v = toKRW(+$amt.value, cur);
-    $krw.value = $amt.value === '' || v == null ? '' : Math.round(v);
+    if (el.dataset.fx === 'cur') $amt.value = cleanAmount($amt.value, cur); // 돈 종류가 바뀌면 소수점 자리를 맞춰요
+    const v = toKRW(amountNum($amt.value), cur);
+    $krw.value = $amt.value === '' || v == null ? '' : cleanAmount(Math.round(v), 'KRW');
   }
   fxState.amount = $amt.value;
   if (el.dataset.fx === 'cur') card.querySelector('.fx-rate').textContent = fxRateText(cur);
@@ -1605,6 +1715,9 @@ function openSheet(title, body, onSubmit, { danger, save = '저장' } = {}) {
       <div class="sheet-body">${body}</div>
       ${danger ? `<button type="button" class="btn danger-outline block" data-action="sheet-danger">${icon(danger.icon || 'trash', 18)} ${danger.label}</button>` : ''}
     </form>`;
+  // 적는 동안 후보 목록이 뜨는 시트는 처음부터 위까지 펼쳐 둬요.
+  // 그래야 목록이 아래로만 늘어나고, 적고 있는 칸이 위로 밀려 올라가지 않아요.
+  $sheet.querySelector('.sheet').classList.toggle('tall', !!$sheet.querySelector('.sheet-body :is(.ap-field, .place-field, .pick-results, .geo-results)'));
   requestAnimationFrame(() => $sheet.classList.add('open'));
 }
 
@@ -1705,11 +1818,8 @@ function tripSheet(t) {
     if (t) return store.updateTrip(t.id, data);
     const { id, done } = store.createTrip(me(), data);
     // 서버에 저장된 뒤에 들어가요. 먼저 들어가면 서버엔 아직 없는 여행이라 접근 권한 오류가 나요.
-    // 들어가면 바로 멤버를 초대할 수 있게 멤버 화면을 띄웁니다.
-    return done.then(() => {
-      location.hash = `#/trip/${id}`;
-      setTimeout(membersSheet, 400);
-    });
+    // 멤버 초대는 여행 화면의 '멤버 추가' 버튼으로 원할 때 해요.
+    return done.then(() => { location.hash = `#/trip/${id}`; });
   }, {
     danger: !t ? null : owner ? {
       label: '여행 삭제',
@@ -1943,13 +2053,11 @@ async function searchEventGeo(form) {
   evGeo.results = found;
   $f.innerHTML = `
     <p class="pf-head">${found.length ? '어디인지 골라주세요' : '검색으로는 못 찾았어요'}</p>
-    ${found.map((r, i) => `
-      <button type="button" class="geo-item" data-action="ev-geo-pick" data-id="${i}">
-        ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small>${r.km != null ? `<em class="geo-km">${fmtKm(r.km)}</em> · ` : ''}${esc(r.address)}</small></span>
-      </button>`).join('')}
+    ${found.map((r, i) => geoItem(r, 'ev-geo-pick', i)).join('')}
     <button type="button" class="geo-item map-pick" data-action="ev-map-pick">
       ${icon('search', 16)}<span><b>${found.length ? '목록에 없어요' : '지도에서 찾기'}</b><small>지도·구글맵 링크로 직접 고르기</small></span>
     </button>`;
+  koreanize($f, found);
 }
 
 function setEventLoc(form, loc, label) {
@@ -2013,11 +2121,9 @@ async function pickSearch(box) {
   }
   pickFound = (await geocode(q, { lat: c.lat, lng: c.lng }).catch(() => [])).slice(0, 5);
   $r.innerHTML = pickFound.length
-    ? pickFound.map((r, i) => `
-      <button type="button" class="geo-item" data-action="pick-go" data-id="${i}">
-        ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small>${r.km != null ? `<em class="geo-km">${fmtKm(r.km)}</em> · ` : ''}${esc(r.address)}</small></span>
-      </button>`).join('')
+    ? pickFound.map((r, i) => geoItem(r, 'pick-go', i)).join('')
     : '<p class="pick-msg">못 찾았어요. 영어 이름으로 찾거나, 구글맵에서 장소 링크를 복사해 붙여넣어주세요.</p>';
+  koreanize($r, pickFound);
 }
 
 // 구글맵 링크 → 위치. 긴 링크는 바로 읽고, 짧은 공유 링크(maps.app.goo.gl)는 가치가 서버가 열어서 읽어 줘요.
@@ -2046,6 +2152,9 @@ async function makePickMap(el) {
   return new Promise(r => map.on('load', () => {
     el._map = map;
     styleMap(map);
+    // 여행지를 몰라서 한국 지도에서 시작할 때: 어떻게 하면 되는지 알려줘요.
+    const $r = !near && el.closest('.pick-box')?.querySelector('.pick-results');
+    if ($r && !$r.innerHTML) $r.innerHTML = '<p class="pick-msg">여행 설정에서 도착 공항을 정하면 지도가 그 도시에서 열려요. 위 칸에서 도시·동네 이름으로 찾아도 돼요.</p>';
     el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
     r(map);
   }));
@@ -2090,11 +2199,9 @@ async function searchPlaceLocation(form) {
     const near = await Promise.race([tripCenter(), new Promise(r => setTimeout(r, 4000))]).catch(() => null);
     geoResults = await geocode(q, near);
     $out.innerHTML = geoResults.length
-      ? geoResults.map((r, i) => `
-        <button type="button" class="geo-item" data-action="geo-pick" data-id="${i}">
-          ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small>${r.km != null ? `<em class="geo-km">${fmtKm(r.km)}</em> · ` : ''}${esc(r.address)}</small></span>
-        </button>`).join('')
+      ? geoResults.map((r, i) => geoItem(r, 'geo-pick', i)).join('')
       : '<p class="search-msg">못 찾았어요. 지점명을 빼거나 "도시 이름 + 장소"로 다시 적어보세요.<br>또는 구글맵에서 장소를 열고 주소창 링크를 아래 링크 칸에 붙여넣어주세요.</p>';
+    koreanize($out, geoResults);
   } catch (e) {
     $out.innerHTML = `<p class="search-msg">${esc(e.message)}</p>`;
   }
@@ -2171,10 +2278,8 @@ async function autoLocate(form) {
     return;
   }
   setPlaceLocation(form, found[0]);
-  if (found.length > 1) $out.innerHTML = `<p class="search-msg">자동으로 넣었어요. 다른 곳이면 아래에서 골라주세요.</p>` + found.slice(1).map((r, i) => `
-    <button type="button" class="geo-item" data-action="geo-pick" data-id="${i + 1}">
-      ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small>${esc(r.address)}</small></span>
-    </button>`).join('');
+  if (found.length > 1) $out.innerHTML = `<p class="search-msg">자동으로 넣었어요. 다른 곳이면 아래에서 골라주세요.</p>` + found.slice(1).map((r, i) => geoItem(r, 'geo-pick', i + 1)).join('');
+  koreanize($out, found);
 }
 let autoLocTimer;
 
@@ -2304,7 +2409,7 @@ function expenseSheet(x = {}) {
   openSheet(x.id ? '지출 수정' : '지출 기록', `
     ${field('어디에 썼나요', `<input name="title" required maxlength="40" placeholder="예: 저녁 이자카야" value="${esc(x.title)}">`)}
     <div class="row">
-      ${field('금액', `<input name="amount" type="number" inputmode="decimal" min="0" step="${fxStep(cur)}" placeholder="0" value="${esc(x.amount)}">`)}
+      ${field('금액', `<input name="amount" class="money-in" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(cleanAmount(x.amount, cur))}">`)}
       ${field('통화', `<select name="cur" class="cur-select">${CURRENCIES.map(([c, label]) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${label}</option>`).join('')}</select>`)}
     </div>
     <small class="hint fx-hint">${amountHint(x.amount, cur)}</small>
@@ -2316,9 +2421,9 @@ function expenseSheet(x = {}) {
     </div></div>`}
   `, (d, form) => {
     const split = solo ? [state.user.uid] : new FormData(form).getAll('splitAmong');
-    const amount = Number(d.amount);
+    const amount = amountNum(d.amount);
     if (!d.title.trim()) return '어디에 썼는지 적어주세요';
-    if (!(amount > 0)) return '금액을 입력해주세요';
+    if (!(amount > 0)) return '쓴 금액을 적어주세요';
     if (!split.length) return '나눌 사람을 한 명 이상 골라주세요';
     const data = { title: d.title.trim(), amount, currency: d.cur || cur, date: d.date, paidBy: solo ? state.user.uid : d.paidBy, splitAmong: split };
     return x.id
@@ -2400,7 +2505,8 @@ const actions = {
   },
   'ev-geo-pick': (d, el) => {
     const r = evGeo.results[+d.id];
-    if (r) setEventLoc(el.form, r, r.name);
+    const ko = r && koOf(r); // 한국어로 바꿔 둔 이름이 있으면 그걸로 보여줘요
+    if (r) setEventLoc(el.form, r, ko ? [ko.name, ko.area].filter(Boolean).join(' · ') : r.name);
   },
   'ev-geo-again': (d, el) => searchEventGeo(el.form),
   'pick-search': (d, el) => pickSearch(el.closest('.pick-box')),
@@ -2670,6 +2776,7 @@ document.addEventListener('contextmenu', e => { if (e.target.closest('.route .st
 // 공항 칸에 적으면 바로 찾아 보여주고, 새 여행은 이름에 든 도시로 도착 공항을 채워 둡니다.
 document.addEventListener('input', e => {
   if (e.target.name === 'handle') checkHandleInput(e.target);
+  if (e.target.classList?.contains('money-in')) formatMoneyInput(e.target, moneyCur(e.target));
   if (e.target.dataset.fx) onFxInput(e.target);
   onAmountInput(e.target);
 });
@@ -2678,7 +2785,7 @@ document.addEventListener('change', e => { if (e.target.dataset.fx) onFxInput(e.
 function onAmountInput(el) {
   const form = el.form;
   if ((el.name !== 'amount' && el.name !== 'cur') || !form?.querySelector('.fx-hint')) return;
-  form.amount.step = fxStep(form.cur.value);
+  if (el.name === 'cur') form.amount.value = cleanAmount(form.amount.value, form.cur.value); // 돈 종류가 바뀌면 소수점 자리를 맞춰요
   form.querySelector('.fx-hint').textContent = amountHint(form.amount.value, form.cur.value);
 }
 // 지도 검색 칸: 엔터는 시트 저장 대신 검색, 구글맵 링크를 붙이면 바로 찾아요.

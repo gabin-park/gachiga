@@ -395,6 +395,7 @@ button:active, a:active { transform: scale(.98); }
   transform: translateY(100%); transition: transform .28s cubic-bezier(.2, .8, .2, 1);
 }
 #sheet-root.open .sheet { transform: none; }
+.sheet.tall { height: 92dvh; }
 .grabber { width: 38px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; }
 .sheet-head { position: sticky; top: 0; z-index: 1; background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 10px 0 14px; }
 .sheet-head h3 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 20px; }
@@ -573,6 +574,8 @@ textarea { resize: none; }
 .geo-item .ic { color: var(--primary); flex-shrink: 0; margin-top: 2px; }
 .geo-item span { display: flex; flex-direction: column; min-width: 0; }
 .geo-item small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.geo-item .geo-addr { display: inline; }
+.geo-item small.geo-orig { font-size: 11px; opacity: .8; } /* 한국어로 바꾼 후보의 원래 현지 이름 */
 .geo-results .search-msg { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .field .hint { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
 
@@ -697,7 +700,6 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 .stop.dragging { z-index: 5; }
 .stop.dragging .stop-card { transform: scale(1.03); box-shadow: 0 14px 30px rgba(19, 41, 75, .22); transition: transform .15s; }
 .route.sorting .stop:not(.dragging) { transition: none; }
-.geo-km { font-style: normal; font-weight: 700; color: var(--primary); }
 
 /* 지도에서 위치 고르기 */
 .pick-hint { margin: 0 0 10px; font-size: 14px; color: var(--muted); line-height: 1.5; }
