@@ -626,9 +626,11 @@ function viewHome() {
         <span class="notice-go">${icon('chevron', 18)}</span>
       </a>` : ''}
     ${trips.length ? `
-      <h2 class="section-title pad">내 여행 <span class="count">${trips.length}</span></h2>
-      ${trips.map(ticket).join('')}
-      <button class="btn primary block" data-action="new-trip">${icon('plus')} 새 여행 만들기</button>` : pastN ? `
+      <div class="section-head">
+        <h2 class="section-title">내 여행 <span class="count">${trips.length}</span></h2>
+        <button class="btn-sm primary" data-action="new-trip">${icon('plus', 15)} 새 여행</button>
+      </div>
+      ${trips.map(ticket).join('')}` : pastN ? `
       <div class="empty">
         <p><b>다가오는 여행이 없어요</b><br>다녀온 여행 ${pastN}개는 프로필의 지난 여행 기록에 있어요.</p>
         <button class="btn primary" data-action="new-trip">${icon('plus')} 새 여행 만들기</button>

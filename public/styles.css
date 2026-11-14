@@ -127,6 +127,9 @@ button:active, a:active { transform: scale(.98); }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 700; vertical-align: middle; }
 .section-title { font-size: 15px; font-weight: 800; margin: 0 0 10px; }
 .section-title.pad { margin: 18px 4px 12px; }
+/* 여행이 많아도 스크롤 없이 누르게, 새 여행 버튼은 '내 여행' 제목 옆에 둬요 */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 4px 12px; }
+.section-head .section-title { margin: 0; }
 .empty { text-align: center; color: var(--muted); padding: 48px 20px 32px; }
 .empty b { color: var(--ink); font-size: 17px; }
 .empty-icon { font-size: 52px; margin-bottom: 10px; animation: float 3s ease-in-out infinite; }
