@@ -4,6 +4,8 @@
 // GET /?tr=<한국어로 적은 장소 이름>&trip=<여행지 도시>
 //   → { names: ['一蘭 新宿', 'Ichiran Shinjuku'], city: 'Tokyo' }  지도 검색이 현지어만 알아서, 현지 표기·영어 이름으로 바꿔 줘요.
 //     city는 그 장소가 있는 도시(영어). 여행지를 모를 때 그 도시 근처에서 찾는 데 써요.
+// GET /?ko=<후보 목록: 줄마다 '이름<TAB>주소'>
+//   → { items: [{ name: '스타벅스', area: '시부야구 진구마에' }] }  현지어 후보를 한국어로 읽을 수 있게 바꿔 줘요(같은 순서).
 // GET /?gmaps=<구글맵 공유 링크>
 //   → { url, lat, lng, name }  짧은 링크(maps.app.goo.gl)를 열어 좌표를 읽어 줘요(사파리에서는 직접 못 열어서).
 // 1) 인스타 공식 임베드 페이지에서 본문 글(캡션)을 읽고
@@ -39,6 +41,11 @@ export default {
     if (!allowed(origin)) return reply({ error: 'forbidden' }, 403);
 
     const params = new URL(request.url).searchParams;
+    if (params.get('ko')) {
+      const rows = params.get('ko').split('\n').slice(0, 8).map(l => l.split('\t').map(v => v.slice(0, 160)));
+      const items = await koreanLabels(env, rows).catch(e => { console.log(JSON.stringify({ ko: rows.length, error: String(e.message || e) })); return []; });
+      return reply({ items });
+    }
     if (params.get('tr')) {
       const q = params.get('tr').slice(0, 60), city = (params.get('trip') || '').slice(0, 40);
       const out = await localNames(env, q, city).catch(e => { console.log(JSON.stringify({ tr: q, error: String(e.message || e) })); return { names: [], city: '' }; });
@@ -100,6 +107,35 @@ export async function localNames(env, q, city) {
   if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
   const clean = v => (typeof v === 'string' ? v.trim().slice(0, 80) : '');
   return { names: [...new Set([clean(data?.local), clean(data?.en)].filter(n => n && n !== q))], city: clean(data?.city).slice(0, 40) };
+}
+
+// 현지어 장소 후보 → 한국어 이름과 짧은 동네 이름
+const KO_PROMPT = `너는 여행 앱 도우미야. 지도 검색 후보(이름과 주소)를 한국 사람이 읽을 수 있게 한국어로 바꿔.
+각 줄마다 { name, area }를 같은 순서, 같은 개수로 돌려줘.
+- name: 장소 이름을 한국에서 부르는 말로. 브랜드는 한국 표기(スターバックス → 스타벅스), 고유 이름은 현지 발음을 한국어로(清水寺 → 기요미즈데라, 一蘭 → 이치란, 神宮前 → 진구마에). 일본 한자는 일본어 발음으로 읽어. 이미 한국어나 쉬운 영어면 그대로.
+- area: 주소에서 구 이름과 가장 작은 동네 이름을 한국어 발음으로(예: "神宮前四丁目, 渋谷区" → "시부야구 진구마에 4초메", "代々木二丁目, 渋谷区" → "시부야구 요요기 2초메").
+  같은 체인점을 동네로 구분하려는 거라 동네 이름이 주소에 있으면 꼭 넣어. 나라·도·우편번호·번지 숫자는 빼. 주소가 없으면 빈 문자열.
+- 지어내지 마. 주어진 글자만 옮겨.`;
+const KO_SCHEMA = {
+  type: 'object',
+  properties: { items: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, area: { type: 'string' } }, required: ['name', 'area'] } } },
+  required: ['items'],
+};
+export async function koreanLabels(env, rows) {
+  const out = await env.AI.run(MODEL, {
+    messages: [
+      { role: 'system', content: KO_PROMPT },
+      { role: 'user', content: rows.map(([name, address = ''], i) => `${i + 1}. ${name} / ${address}`).join('\n') },
+    ],
+    response_format: { type: 'json_schema', json_schema: KO_SCHEMA },
+    max_tokens: 600,
+    temperature: 0,
+  });
+  let data = out?.response;
+  if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
+  const clean = v => (typeof v === 'string' ? v.trim().slice(0, 60) : '');
+  const items = Array.isArray(data?.items) ? data.items : [];
+  return rows.map((_, i) => ({ name: clean(items[i]?.name), area: clean(items[i]?.area) }));
 }
 
 // 공개 게시물의 임베드(본문 포함) 페이지에서 작성자와 본문을 꺼냅니다.
