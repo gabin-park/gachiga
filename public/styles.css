@@ -171,6 +171,16 @@ button:active, a:active { transform: scale(.98); }
 .inapp-pass-body > b { font-size: 16px; color: var(--ink); }
 .inapp-pass-body > p { margin: 0 0 8px; font-size: 14px; line-height: 1.6; color: var(--muted); word-break: keep-all; }
 .inapp-pass-body > .inapp-help { margin: 6px 0 0; text-align: center; font-size: 13px; }
+.inapp-steps { margin: 0; padding: 12px 14px 12px 32px; border-radius: 12px; background: var(--surface); font-size: 15px; line-height: 1.5; color: var(--ink); }
+.inapp-steps li + li { margin-top: 8px; }
+.inapp-steps .ic-more { font-size: 15px; }
+/* 인스타 ••• 버튼이 있는 오른쪽 위를 가리키는 화살표 */
+.inapp-arrow { position: fixed; top: 8px; right: 12px; color: var(--primary); animation: inapp-point 1.2s ease-in-out infinite; pointer-events: none; }
+@keyframes inapp-point { 50% { translate: 4px -4px; } }
+.home-first { width: 100%; max-width: 330px; margin-top: 18px; padding: 14px 16px; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); text-align: center; }
+.home-first > b { font-size: 14px; color: var(--ink); }
+.home-first > p { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.home-first > .home-first-steps { margin-top: 8px; font-size: 14px; font-weight: 600; color: var(--ink); }
 .notice { background: var(--primary-soft); color: var(--primary); padding: 10px 14px; border-radius: 14px; font-size: 14px; font-weight: 700; margin-top: 20px; }
 .g { font-weight: 900; background: #fff; color: #4285f4; width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; }
 
@@ -759,6 +769,7 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 .guide-text { margin: 0 0 22px; min-height: 7.4em; font-size: 14px; line-height: 1.6; color: var(--muted); word-break: keep-all; }
 .guide-text p { margin: 0; }
 .guide-text p + p { margin-top: 10px; }
+.guide-text .guide-note { font-size: 12.5px; color: var(--muted); opacity: .85; }
 .guide-dots { display: flex; justify-content: center; gap: 6px; margin-bottom: 16px; }
 .guide-dots button { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 4px; background: var(--line-strong); transition: width .2s; }
 .guide-dots button.on { width: 20px; background: var(--ink); }

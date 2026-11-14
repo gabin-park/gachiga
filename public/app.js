@@ -31,10 +31,20 @@ let installPrompt = null; // 안드로이드 크롬·삼성 인터넷의 '앱 �
 // 카톡·인스타처럼 앱 안에서 열린 브라우저. 구글이 여기선 로그인을 막아요.
 const IN_APP = (() => {
   const ua = navigator.userAgent, android = /Android/.test(ua);
-  const name = /KAKAOTALK/i.test(ua) ? '카톡' : /Instagram/.test(ua) ? '인스타' : /FBAN|FBAV|FB_IAB/.test(ua) ? '페이스북'
+  const name = /KAKAOTALK/i.test(ua) ? '카톡' : /Instagram/.test(ua) ? '인스타' : /Barcelona/.test(ua) ? '스레드' : /FBAN|FBAV|FB_IAB/.test(ua) ? '페이스북'
     : /Line\//.test(ua) ? '라인' : /NAVER\(inapp|DaumApps|everytimeApp/.test(ua) || (android && /; wv\)/.test(ua)) ? '이 앱' : '';
-  return name ? { name, android, kakao: name === '카톡' } : null;
+  // 아이폰의 인스타·페이스북·스레드는 사파리로 넘기는 주소를 막아서, ••• 메뉴로 여는 법을 알려줘요.
+  return name ? { name, android, kakao: name === '카톡', meta: !android && ['인스타', '페이스북', '스레드'].includes(name) } : null;
 })();
+// 홈 화면에 추가하는 방법은 폰과 브라우저마다 달라서, 쓰는 사람 환경에 맞는 순서를 보여줘요.
+const HOME_STEPS = {
+  'ios-safari': ['{more} → 공유 → 홈 화면에 추가,', '세 번만 누르면 돼요.'],
+  'ios-chrome': ['주소창 옆 {share} → 홈 화면에 추가,', '두 번만 누르면 돼요.'],
+  'android-prompt': ['아래 버튼을 누르면', '홈 화면에 바로 추가돼요.'],
+  'android-chrome': ['{dots} → 홈 화면에 추가,', '두 번만 누르면 돼요.'],
+  'android-other': ['브라우저 메뉴에서', '\'홈 화면에 추가\'를 눌러요.'],
+};
+const DOTS = '<i></i><i></i><i></i>';
 const tipsSeen = (() => { try { return JSON.parse(localStorage.getItem('gachiga-tips') || '{}'); } catch { return {}; } })(); // 닫은 탭 팁
 const fxState = { loading: false, failAt: 0, cur: '', amount: '' };
 const wx = { for: '', days: null };
@@ -429,30 +439,23 @@ const GUIDE = [
   ['money', '정산은 자동으로', [['지출을 적을 때 통화를 고르면', '오늘 환율로 알아서 바꿔줘요.'], ['누가 누구에게 얼마 보낼지 알려주고,', '복사해서 단톡방에 붙여넣기만 하면 돼요.']]],
   ['home', '홈 화면에 앱처럼 두기', [['주소를 칠 필요 없이', '홈 화면에서 바로 열어요.']]], // 둘째 문단은 폰·브라우저마다 HOME_STEPS에서
 ];
-// 홈 화면에 추가하는 방법은 폰과 브라우저마다 달라서, 쓰는 사람 환경에 맞는 순서를 보여줘요.
-const HOME_STEPS = {
-  'ios-safari': ['{more} → 공유 → 홈 화면에 추가,', '세 번만 누르면 돼요.'],
-  'ios-chrome': ['주소창 옆 {share} → 홈 화면에 추가,', '두 번만 누르면 돼요.'],
-  'android-prompt': ['아래 버튼을 누르면', '홈 화면에 바로 추가돼요.'],
-  'android-chrome': ['{dots} → 홈 화면에 추가,', '두 번만 누르면 돼요.'],
-  'android-other': ['브라우저 메뉴에서', '\'홈 화면에 추가\'를 눌러요.'],
-};
 // 이미 홈 화면 앱으로 열었거나, 컴퓨터·카톡 같은 앱 안 브라우저면 카드를 빼요(null).
 function homePlatform() {
   const ua = navigator.userAgent;
   if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) return null;
-  if (/KAKAOTALK|Instagram|FBAN|FBAV|Line\/|NAVER\(inapp|DaumApps|; wv\)/i.test(ua)) return null;
+  if (/KAKAOTALK|Instagram|Barcelona|FBAN|FBAV|Line\/|NAVER\(inapp|DaumApps|; wv\)/i.test(ua)) return null;
   const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // 아이패드는 맥처럼 보여요
   if (ios) return /CriOS/.test(ua) ? 'ios-chrome' : /FxiOS|EdgiOS|OPiOS|GSA\//.test(ua) ? null : 'ios-safari';
   if (/Android/.test(ua)) return installPrompt ? 'android-prompt' : /Chrome\//.test(ua) && !/SamsungBrowser|Whale|EdgA|OPR/.test(ua) ? 'android-chrome' : 'android-other';
   return null;
 }
 const guideCards = () => GUIDE.filter(([art]) => art !== 'home' || homePlatform());
-const DOTS = '<i></i><i></i><i></i>';
-const guideLine = l => esc(l)
-  .replace('{more}', `<span class="ic-more" aria-label="더 보기 버튼">${DOTS}</span>`)
-  .replace('{dots}', `<span class="ic-more col" aria-label="메뉴 버튼">${DOTS}</span>`)
-  .replace('{share}', `<span class="ic-more share" aria-label="공유 버튼">${icon('share', 13)}</span>`);
+function guideLine(l) {
+  return esc(l)
+    .replace('{more}', `<span class="ic-more" aria-label="더 보기 버튼">${DOTS}</span>`)
+    .replace('{dots}', `<span class="ic-more col" aria-label="메뉴 버튼">${DOTS}</span>`)
+    .replace('{share}', `<span class="ic-more share" aria-label="공유 버튼">${icon('share', 13)}</span>`);
+}
 function renderGuide(allowed) {
   const show = allowed && state.guide != null;
   if (!show) { guideRoot?.remove(); guideRoot = null; return; }
@@ -478,6 +481,7 @@ function renderGuide(allowed) {
       <div class="guide-art"><svg viewBox="0 0 120 120" width="120" height="120" aria-hidden="true">${GART[art]}</svg></div>
       <h2 class="guide-title">${title}</h2>
       <div class="guide-text">${text.map(lines => `<p>${lines.map(guideLine).join('<br>')}</p>`).join('')}
+        ${home && home.startsWith('ios') ? '<p class="guide-note">홈 화면 앱은 사파리와 로그인을 따로 기억해서,<br>처음 열 때 한 번만 다시 로그인해요.</p>' : ''}
         ${home === 'android-prompt' ? `<button class="btn-sm primary guide-install" data-action="install-app">${icon('plus', 15)} 홈 화면에 추가</button>` : ''}</div>
       <div class="guide-dots">${cards.map((_, j) => `<button class="${j === i ? 'on' : ''}" data-action="guide-go" data-i="${j}" aria-label="${j + 1}번째"></button>`).join('')}</div>
       <div class="guide-nav">
@@ -513,9 +517,21 @@ function viewLogin() {
     ${IN_APP ? inAppCard() : `<form data-form="signin" class="login-form">
       ${isDemo ? `<input name="name" placeholder="내 이름" required maxlength="20" autocomplete="nickname">` : ''}
       <button class="btn primary big">${isDemo ? '출발하기' : '<span class="g">G</span> Google로 시작하기'}</button>
-    </form>`}
+    </form>${homeFirstCard()}`}
     ${isDemo ? `<p class="demo-note">데모 모드예요. 이 브라우저에만 저장돼요. 새 탭에서 다른 이름으로 들어가면 친구 역할을 해볼 수 있어요.</p>` : ''}
   </main>`;
+}
+
+// 아이폰은 홈 화면 앱과 사파리가 로그인을 따로 기억해요. 홈 화면에 먼저 추가하고 거기서 로그인하면 한 번이면 돼요.
+function homeFirstCard() {
+  const home = homePlatform();
+  if (!home?.startsWith('ios')) return '';
+  return `
+    <div class="home-first">
+      <b>홈 화면에 두고 쓸 건가요?</b>
+      <p>홈 화면에 먼저 추가하고 거기서 로그인하면,<br>로그인을 한 번만 하면 돼요.</p>
+      <p class="home-first-steps">${guideLine(HOME_STEPS[home][0].replace(/,$/, ''))}</p>
+    </div>`;
 }
 
 // 앱 안 브라우저면 로그인 버튼 대신 '사파리·크롬에서 열기' 안내를 보여줘요.
@@ -533,10 +549,13 @@ function inAppCard() {
       <div class="inapp-pass-body">
         <b>${browser}에서 열어주세요</b>
         <p>이 화면에서는 구글 로그인이 막혀 있어요.</p>
-        <button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>
+        ${IN_APP.meta ? `<ol class="inapp-steps">
+          <li>오른쪽 위 <span class="ic-more" aria-label="더 보기 버튼">${DOTS}</span> 를 눌러요</li>
+          <li><b>외부 브라우저로 열기</b>를 눌러요</li>
+        </ol>` : `<button class="btn primary block" data-action="open-outside">${browser}에서 열기</button>`}
         <p class="inapp-help">안 열리나요? <button class="tip-link" data-action="copy-site">링크 복사하기</button></p>
       </div>
-    </div>`;
+    </div>${IN_APP.meta ? `<svg class="inapp-arrow" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>` : ''}`;
 }
 // 카톡은 바깥 브라우저로 여는 기능을 주고, 안드로이드는 크롬으로 바로 넘길 수 있어요.
 // 아이폰의 다른 앱은 사파리 주소(x-safari-)로 시도하고, 막히면 링크 복사로 옮겨요.
