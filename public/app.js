@@ -1820,7 +1820,7 @@ function handleSheet() {
       <input name="handle" value="${esc(me().handle)}" maxlength="20" autocapitalize="off" autocomplete="off" spellcheck="false">
     </label>
     <p class="handle-status" aria-live="polite"></p>
-    <p class="muted xsmall">영문 소문자, 숫자, _ 와 . 으로 3~20자예요. 바꾸면 예전 아이디로는 나를 찾을 수 없고, 다른 사람이 그 아이디를 쓸 수 있게 돼요.</p>
+    <p class="muted xsmall">영문 소문자, 숫자, _, . 을 써서 3~20자로 정해주세요. 친구는 그대로 유지되고, 예전 아이디로는 더 이상 검색되지 않아요.</p>
   `, d => {
     const handle = d.handle.trim().replace(/^@/, '').toLowerCase();
     if (!HANDLE_RE.test(handle)) return '아이디는 영문 소문자, 숫자, _ 와 . 으로\n3~20자 적어주세요';
