@@ -582,12 +582,29 @@ textarea { resize: none; }
 /* 통화 */
 .currency-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 10px; margin: -6px 0; border-radius: 99px; font: inherit; letter-spacing: .08em; color: var(--primary-deep); background: var(--primary-soft); }
 .receipt-note { margin: 12px 0 10px; font-size: 13px; line-height: 1.5; color: var(--muted); }
-.currency-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: 12px; }
-.currency-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px; border-radius: 14px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: inherit; }
-.currency-item b { font-size: 20px; }
-.currency-item span { font-size: 13px; font-weight: 700; }
-.currency-item small { font-size: 11px; color: var(--muted); letter-spacing: .1em; }
-.currency-item.on { background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--primary); }
+/* 통화 고르기: 검색칸 + 목록(자주 쓰는 통화 → 모든 통화) */
+.cur-search { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 14px; background: var(--bg); color: var(--muted); margin-bottom: 8px; }
+.cur-picker .cur-search input { flex: 1; min-width: 0; height: 100%; min-height: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; font: inherit; font-size: 16px; font-weight: 500; text-align: left; color: var(--ink); outline: none; -webkit-appearance: none; appearance: none; }
+.cur-list { display: flex; flex-direction: column; }
+/* 통화 창에서는 목록을 내려도 검색칸이 제목 아래에 붙어 있어요 */
+.sheet-body > .cur-picker > .cur-search { position: sticky; top: 56px; z-index: 1; box-shadow: 0 0 0 6px var(--surface); }
+.cur-sec { margin: 10px 4px 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.cur-row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 12px; color: var(--ink); }
+.cur-row[hidden], .cur-sec[hidden], .cur-none[hidden] { display: none; }
+.cur-row.on { background: var(--primary-soft); color: var(--primary); }
+.cur-sym { display: grid; place-items: center; flex: none; min-width: 36px; height: 36px; padding: 0 6px; border-radius: 11px; background: var(--bg); font-size: 14px; font-weight: 800; }
+.cur-row.on .cur-sym { background: #fff; }
+.cur-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; }
+.cur-row small { font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.cur-none { margin: 16px 4px; font-size: 13px; color: var(--muted); text-align: center; }
+/* 지출 기록·환율 계산기의 통화 칸: 누르면 아래로 목록이 떠요 */
+.cur-field { position: relative; }
+.cur-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; height: 52px; padding: 0 14px; border-radius: 14px; background: var(--bg); font-weight: 700; white-space: nowrap; }
+.cur-btn span { overflow: hidden; text-overflow: ellipsis; }
+.cur-pop { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(330px, calc(100vw - 32px)); max-height: 340px; overflow-y: auto; overscroll-behavior: contain; padding: 8px; border-radius: 18px; background: var(--surface); box-shadow: 0 12px 32px rgba(19, 41, 75, .2); }
+.cur-pop[hidden] { display: none; }
+.cur-field.right .cur-pop { left: auto; right: 0; }
+.cur-pop .cur-search { position: sticky; top: -8px; z-index: 1; margin: -8px -8px 6px; border-radius: 18px 18px 0 0; background: var(--surface); box-shadow: 0 1px 0 var(--line); }
 .expense-ico { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); flex-shrink: 0; }
 
 /* 프로필 꾸미기 */
@@ -737,9 +754,7 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 .fx-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px 10px 10px; border-radius: 14px; background: var(--bg); border: 1.5px solid transparent; }
 .fx-row:focus-within { border-color: var(--primary); background: var(--surface); }
 .fx-row input { flex: 1; min-width: 0; padding: 0; border: 0 !important; background: transparent !important; text-align: right; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.fx-cur { position: relative; flex: none; display: inline-flex; align-items: center; height: 34px; border-radius: 99px; background: var(--primary-soft); color: var(--primary-deep); font-size: 13px; font-weight: 800; }
-.fx-cur select { height: 34px; padding: 0 28px 0 12px; border: 0; border-radius: 99px; background: transparent; color: inherit; font: inherit; -webkit-appearance: none; appearance: none; }
-.fx-cur .ic { position: absolute; right: 10px; pointer-events: none; }
+.fx-cur { flex: none; display: inline-flex; align-items: center; height: 34px; border-radius: 99px; font-size: 13px; font-weight: 800; }
 .fx-cur.krw { padding: 0 12px; background: var(--surface); color: var(--muted); }
 .fx-eq { position: relative; z-index: 1; display: flex; justify-content: center; height: 0; }
 .fx-eq span { display: grid; place-items: center; width: 32px; height: 32px; margin-top: -16px; border-radius: 50%; background: var(--surface); color: var(--primary); box-shadow: 0 0 0 1.5px var(--line-strong); }
@@ -812,3 +827,8 @@ input[type="time"], input[type="date"] { min-width: 0; max-width: 100%; }
 
 /* 직접 복사하기 창 */
 .copy-box { width: 100%; margin-top: 10px; resize: none; font: 14px/1.55 var(--body); user-select: text; -webkit-user-select: text; }
+
+/* 환율 계산기의 통화 칸은 작은 알약 모양 */
+.fx-card .cur-field { flex: none; }
+.fx-card .cur-pop { width: min(300px, calc(100vw - 80px)); }
+.fx-card .cur-btn { height: 34px; padding: 0 10px 0 12px; border-radius: 99px; background: var(--primary-soft); color: var(--primary-deep); font-size: 13px; font-weight: 800; }

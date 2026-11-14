@@ -19,11 +19,33 @@ const IG_API = 'https://gachiga-ig.gachiga-trip.workers.dev/';
 const DAY_COLOR = '#3a86ff'; // 일정 지도 핀·길 색(모든 날 같은 색)
 const IG_RE = /https?:\/\/(?:www\.)?instagram\.com\/(?:[\w.]+\/)?(?:p|reels?|tv)\/([\w-]+)/i;
 // 통화 목록 순서: 원화·달러를 맨 위에 둬요 (모든 통화 고르기 화면이 이 순서를 따라요)
-const CURRENCIES = [
+// 자주 쓰는 통화는 짧은 이름으로 맨 위에 두고, 나머지는 가나다순으로 그 아래에 둬요.
+const POPULAR_CURRENCIES = [
   ['KRW', '한국 원'], ['USD', '미국 달러'], ['JPY', '일본 엔'], ['EUR', '유로'], ['TWD', '대만 달러'], ['THB', '태국 바트'],
   ['VND', '베트남 동'], ['CNY', '중국 위안'], ['HKD', '홍콩 달러'], ['SGD', '싱가포르 달러'], ['PHP', '필리핀 페소'],
   ['GBP', '영국 파운드'], ['AUD', '호주 달러'], ['CAD', '캐나다 달러'], ['CHF', '스위스 프랑'], ['MYR', '말레이시아 링깃'],
 ];
+// 환율 두 곳(코인베이스·open.er-api)이 모두 주는 통화. 이름은 휴대폰에 든 한국어 이름(Intl)을 써요.
+const MORE_CURRENCY_CODES = `AED AFN ALL AMD ANG AOA ARS AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL BSD BTN BWP BYN BZD
+  CDF CLP COP CRC CUP CVE CZK DJF DKK DOP DZD EGP ETB FJD FKP GEL GHS GIP GMD GNF GTQ GYD HNL HTG HUF IDR ILS INR IQD IRR
+  ISK JMD JOD KES KGS KHR KMF KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MZN NAD
+  NGN NIO NOK NPR NZD OMR PAB PEN PGK PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SHP SOS SRD SSP SYP SZL TJS TMT
+  TND TOP TRY TTD TZS UAH UGX UYU UZS VES VUV WST XAF XCD XOF XPF YER ZAR ZMW`.split(/\s+/);
+const CURRENCIES = (() => {
+  let ko, en;
+  try { ko = new Intl.DisplayNames('ko', { type: 'currency' }); en = new Intl.DisplayNames('en', { type: 'currency' }); } catch {}
+  const more = MORE_CURRENCY_CODES.map(c => [c, ko?.of(c) || c]).sort((a, b) => a[1].localeCompare(b[1], 'ko'));
+  return [...POPULAR_CURRENCIES, ...more].map(([c, label]) => [c, label, en?.of(c) || '']);
+})();
+const curLabel = c => CURRENCIES.find(x => x[0] === c)?.[1] || c;
+// 여행지 이름으로도 찾을 수 있게(예: 발리 → 루피아).
+const CURRENCY_PLACES = {
+  USD: '괌 하와이 사이판 뉴욕 엘에이 미국', EUR: '유럽 프랑스 파리 독일 이탈리아 스페인 포르투갈 네덜란드 오스트리아 그리스 핀란드 아일랜드 벨기에 크로아티아',
+  JPY: '오사카 도쿄 후쿠오카 오키나와', CNY: '상하이 베이징 칭다오', THB: '방콕 푸껫 치앙마이 파타야', VND: '다낭 하노이 호치민 나트랑 푸꾸옥',
+  PHP: '세부 보라카이 마닐라', IDR: '발리 자카르타', MYR: '코타키나발루 쿠알라룸푸르', AED: '두바이 아부다비 UAE', TWD: '타이베이 가오슝',
+  GBP: '런던 영국', AUD: '시드니 멜버른', NZD: '오클랜드 퀸스타운', TRY: '이스탄불 터키', MOP: '마카오', KHR: '씨엠립 앙코르와트', LAK: '비엔티안 루앙프라방',
+  MNT: '울란바토르', CZK: '프라하', HUF: '부다페스트', CHF: '취리히 인터라켄', MXN: '칸쿤',
+};
 // 환율·날씨는 받아 온 뒤 화면을 다시 그려요. (첫 화면을 그릴 때도 쓰여서 위에 둬요)
 let fxRates = null; // { time, updated, rates: 1원당 외화 }
 let guideRoot = null; // 사용법 슬라이드 창
@@ -1538,15 +1560,16 @@ function viewExpenses() {
 // 환율: Coinbase 공개 환율(1분마다 바뀌는 시장 환율)을 받아요. 안 되면 하루 한 번 바뀌는 환율로 대신해요.
 // 화면이 열려 있으면 1분마다 다시 그리면서 10분 지난 환율은 새로 받아요. 실패하면 2분 뒤에 다시 시도해요.
 function loadRates() {
-  if (!fxRates) try { fxRates = JSON.parse(localStorage.getItem('gachiga-fx') || 'null'); } catch {}
+  if (!fxRates) try { fxRates = JSON.parse(localStorage.getItem('gachiga-fx-v2') || 'null'); } catch {}
   if (fxRates && Date.now() - fxRates.time < 600e3) return;
   if (fxState.loading || Date.now() - fxState.failAt < 120e3) return;
   fxState.loading = true;
   fetch('https://api.coinbase.com/v2/exchange-rates?currency=KRW')
     .then(r => r.json())
     .then(j => {
-      const rates = Object.fromEntries(CURRENCIES.map(([c]) => [c, c === 'KRW' ? 1 : +j.data.rates[c]]));
-      if (!Object.values(rates).every(v => v > 0)) throw new Error('rates');
+      // 환율이 있는 통화만 담아요. 자주 쓰는 통화가 하나라도 빠지면 다른 곳에서 받아요.
+      const rates = Object.fromEntries(CURRENCIES.map(([c]) => [c, c === 'KRW' ? 1 : +j.data.rates[c]]).filter(([, v]) => v > 0));
+      if (!POPULAR_CURRENCIES.every(([c]) => rates[c] > 0)) throw new Error('rates');
       return { time: Date.now(), updated: Date.now(), rates };
     })
     .catch(() => fetch('https://open.er-api.com/v6/latest/KRW').then(r => r.json()).then(j => {
@@ -1555,7 +1578,8 @@ function loadRates() {
     }))
     .then(r => {
       fxRates = r;
-      try { localStorage.setItem('gachiga-fx', JSON.stringify(fxRates)); } catch {}
+      // v2: 통화가 늘어서 예전 기억은 버려요
+      try { localStorage.setItem('gachiga-fx-v2', JSON.stringify(fxRates)); localStorage.removeItem('gachiga-fx'); } catch {}
       render();
     })
     .catch(() => { fxState.failAt = Date.now(); })
@@ -1619,10 +1643,7 @@ function fxCard() {
   <section class="card fx-card">
     <h2 class="section-title">환율 계산기</h2>
     <div class="fx-row">
-      <label class="fx-cur">
-        <select data-fx="cur" aria-label="통화">${CURRENCIES.filter(([c]) => c !== 'KRW').map(([c, label]) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c} ${label}</option>`).join('')}</select>
-        ${icon('chevronDown', 14)}
-      </label>
+      ${curField(cur, 'data-fx="cur"', { noKRW: true, label: `${cur} ${curLabel(cur)}` })}
       <input data-fx="amount" class="money-in" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="외화 금액" value="${esc(cleanAmount(fxState.amount, cur))}">
     </div>
     <div class="fx-eq" aria-hidden="true"><span>${icon('updown', 16)}</span></div>
@@ -1741,7 +1762,7 @@ function openSheet(title, body, onSubmit, { danger, save = '저장' } = {}) {
     </form>`;
   // 적는 동안 후보 목록이 뜨는 시트는 처음부터 위까지 펼쳐 둬요.
   // 그래야 목록이 아래로만 늘어나고, 적고 있는 칸이 위로 밀려 올라가지 않아요.
-  $sheet.querySelector('.sheet').classList.toggle('tall', !!$sheet.querySelector('.sheet-body :is(.ap-field, .place-field, .pick-results, .geo-results)'));
+  $sheet.querySelector('.sheet').classList.toggle('tall', !!$sheet.querySelector('.sheet-body :is(.ap-field, .place-field, .pick-results, .geo-results, .cur-field, .cur-picker)'));
   requestAnimationFrame(() => $sheet.classList.add('open'));
 }
 
@@ -2434,7 +2455,7 @@ function expenseSheet(x = {}) {
     ${field('어디에 썼나요', `<input name="title" required maxlength="40" placeholder="예: 저녁 이자카야" value="${esc(x.title)}">`)}
     <div class="row">
       ${field('금액', `<input name="amount" class="money-in" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(cleanAmount(x.amount, cur))}">`)}
-      ${field('통화', `<select name="cur" class="cur-select">${CURRENCIES.map(([c, label]) => `<option value="${c}" ${c === cur ? 'selected' : ''}>${label}</option>`).join('')}</select>`)}
+      <div class="field"><span>통화</span>${curField(cur, 'name="cur"', { right: true })}</div>
     </div>
     <small class="hint fx-hint">${amountHint(x.amount, cur)}</small>
     ${field('날짜', `<input type="date" name="date" value="${esc(x.date || defaultDate())}">`)}
@@ -2460,16 +2481,46 @@ function expenseSheet(x = {}) {
 
 const findRequest = (list, id) => list.find(r => r.id === id);
 
+// --- 통화 고르기: 검색칸 + 자주 쓰는 통화 + 모든 통화(가나다순) ---
+const curSymbol = c => formatter(c).formatToParts(0).find(x => x.type === 'currency')?.value || c;
+function curList(selected, action, { noKRW } = {}) {
+  const row = ([c, label, en]) => `
+    <button type="button" class="cur-row ${c === selected ? 'on' : ''}" data-action="${action}" data-id="${c}"
+      data-q="${esc(`${c} ${label} ${en} ${curSymbol(c)} ${CURRENCY_PLACES[c] || ''}`.toLowerCase().replace(/\s+/g, ''))}">
+      <span class="cur-sym">${esc(curSymbol(c))}</span><span class="cur-name">${esc(label)}</span><small>${c}</small>
+      ${c === selected ? icon('check', 16) : ''}
+    </button>`;
+  const list = CURRENCIES.filter(([c]) => !(noKRW && c === 'KRW'));
+  const popular = list.filter(([c]) => POPULAR_CURRENCIES.some(p => p[0] === c));
+  return `
+    <div class="cur-picker">
+      <label class="cur-search">${icon('search', 16)}<input type="search" class="cur-q" placeholder="나라·통화 이름이나 코드 (예: 베트남, EUR)" autocomplete="off" enterkeyhint="search"></label>
+      <div class="cur-list">
+        <p class="cur-sec">자주 쓰는 통화</p>${popular.map(row).join('')}
+        <p class="cur-sec">모든 통화 · 가나다순</p>${list.slice(popular.length).map(row).join('')}
+        <p class="cur-none" hidden>못 찾았어요. 통화 코드(예: USD)로도 찾아보세요.</p>
+      </div>
+    </div>`;
+}
+// 지출 기록·환율 계산기의 통화 칸: 누르면 아래로 고르기 목록이 펼쳐져요. 고른 값은 숨은 칸(attr)에 담아요.
+function curField(cur, attr, { noKRW, right, label } = {}) {
+  return `
+    <div class="cur-field ${right ? 'right' : ''}">
+      <input type="hidden" ${attr} value="${cur}">
+      <button type="button" class="cur-btn" data-action="cur-open" aria-haspopup="listbox">
+        <span>${esc(label || `${curSymbol(cur)} ${curLabel(cur)}`)}</span>${icon('chevronDown', 14)}
+      </button>
+      <div class="cur-pop" hidden>${curList(cur, 'cur-pick', { noKRW })}</div>
+    </div>`;
+}
+function closeCurPops(except) {
+  document.querySelectorAll('.cur-pop:not([hidden])').forEach(p => { if (p !== except) p.hidden = true; });
+}
+
 function currencySheet() {
   const cur = currency();
   openLiveSheet('어떤 통화로 볼까요?', () => `
-    <div class="currency-grid">
-      ${CURRENCIES.map(([c, label]) => `
-        <button type="button" class="currency-item ${c === currency() ? 'on' : ''}" data-action="set-currency" data-id="${c}">
-          <b>${formatter(c).formatToParts(0).find(x => x.type === 'currency')?.value || c}</b>
-          <span>${label}</span><small>${c}</small>
-        </button>`).join('')}
-    </div>
+    ${curList(currency(), 'set-currency')}
     ${state.expenses.length ? '<p class="muted xsmall">적은 지출은 원래 금액 그대로 두고, 고른 돈으로 환산해서 보여줘요. 새 지출은 이 돈으로 먼저 골라져 있어요.</p>' : ''}`);
 }
 
@@ -2613,6 +2664,25 @@ const actions = {
       mixed && fxRates ? `${fxWhen()} 환율 기준 · 가치가` : '가치가',
     ].join('\n');
     copyText(text, '정산 내용을 복사했어요.\n함께 간 친구에게 알려주세요.');
+  },
+  'cur-open': (d, el) => {
+    const pop = el.closest('.cur-field').querySelector('.cur-pop');
+    closeCurPops(pop);
+    pop.hidden = !pop.hidden;
+    if (!pop.hidden) {
+      // 고른 통화가 보이게 목록 안에서만 내려요(scrollIntoView는 시트·화면까지 움직여요).
+      const on = pop.querySelector('.cur-row.on');
+      if (on) pop.scrollTop = on.offsetTop - pop.clientHeight / 2;
+      pop.querySelector('.cur-q').focus({ preventScroll: true });
+    }
+  },
+  'cur-pick': (d, el) => {
+    const box = el.closest('.cur-field'), input = box.querySelector('input[type=hidden]');
+    input.value = d.id;
+    box.querySelector('.cur-btn span').textContent = input.dataset.fx ? `${d.id} ${curLabel(d.id)}` : `${curSymbol(d.id)} ${curLabel(d.id)}`;
+    box.querySelectorAll('.cur-row').forEach(r => r.classList.toggle('on', r.dataset.id === d.id));
+    box.querySelector('.cur-pop').hidden = true;
+    input.dispatchEvent(new Event('change', { bubbles: true })); // 금액 자리수·환율 계산을 다시 해요
   },
   'set-currency': d => {
     if (d.id === currency()) return closeSheet();
@@ -2805,6 +2875,25 @@ document.addEventListener('input', e => {
   onAmountInput(e.target);
 });
 document.addEventListener('change', e => { if (e.target.dataset.fx) onFxInput(e.target); onAmountInput(e.target); });
+// 통화 검색: 적은 글자가 들어간 통화만 남겨요(띄어쓰기·대소문자 무시). 찾는 동안엔 묶음 제목을 숨겨요.
+document.addEventListener('input', e => {
+  if (!e.target.classList.contains('cur-q')) return;
+  const q = e.target.value.toLowerCase().replace(/\s+/g, '');
+  const list = e.target.closest('.cur-picker').querySelector('.cur-list');
+  let shown = 0;
+  list.querySelectorAll('.cur-row').forEach(r => { r.hidden = !!q && !r.dataset.q.includes(q); shown += !r.hidden; });
+  list.querySelectorAll('.cur-sec').forEach(h => { h.hidden = !!q; });
+  list.querySelector('.cur-none').hidden = shown > 0;
+});
+// 검색칸에서 엔터를 눌러도 지출 기록이 저장되지 않게 해요. 찾은 게 하나뿐이면 그걸 골라요.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.classList?.contains('cur-q')) return;
+  e.preventDefault();
+  const rows = [...e.target.closest('.cur-picker').querySelectorAll('.cur-row:not([hidden])')];
+  if (rows.length === 1) rows[0].click();
+});
+// 통화 목록 바깥을 누르면 닫아요.
+document.addEventListener('click', e => { if (!e.target.closest?.('.cur-field')) closeCurPops(); });
 // 지출 기록 창: 금액이나 돈 종류를 바꾸면 소수점 단위와 환산 안내를 맞춰요.
 function onAmountInput(el) {
   const form = el.form;
