@@ -1,6 +1,8 @@
 // 가치가 인스타 분석 서버
 // GET /?url=<인스타 게시물·릴스 링크>
 //   → { author, caption, places: [{ name, query, city, category, address, note }] }
+// GET /?tr=<한국어로 적은 장소 이름>&trip=<여행지 도시>
+//   → { names: ['一蘭 新宿', 'Ichiran Shinjuku'] }  지도 검색이 현지어만 알아서, 현지 표기·영어 이름으로 바꿔 줘요.
 // GET /?gmaps=<구글맵 공유 링크>
 //   → { url, lat, lng, name }  짧은 링크(maps.app.goo.gl)를 열어 좌표를 읽어 줘요(사파리에서는 직접 못 열어서).
 // 1) 인스타 공식 임베드 페이지에서 본문 글(캡션)을 읽고
@@ -13,6 +15,8 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5189', // 로컬 데모 확인용
   'http://localhost:5190', // 로컬 개발 서버
 ];
+// 테스트용 미리보기 주소(gachiga-trip--이름-xxxx.web.app)도 받아요.
+const allowed = origin => ALLOWED_ORIGINS.includes(origin) || /^https:\/\/gachiga-trip--[a-z0-9-]+\.web\.app$/.test(origin);
 const GMAPS_RE = /^https:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|(?:www\.)?google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)/i;
 const IG_RE = /https?:\/\/(?:www\.)?instagram\.com\/(?:[\w.]+\/)?(?:p|reels?|tv)\/([\w-]+)/i;
 const CATEGORIES = ['food', 'cafe', 'sight', 'stay', 'shop', 'etc'];
@@ -23,7 +27,7 @@ export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
     const cors = {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+      'Access-Control-Allow-Origin': allowed(origin) ? origin : ALLOWED_ORIGINS[0],
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       Vary: 'Origin',
     };
@@ -31,9 +35,15 @@ export default {
     const reply = (body, status = 200) => Response.json(body, { status, headers: cors });
 
     // 남이 무료 한도를 써 버리지 않게, 가치가 화면에서 온 요청만 받습니다.
-    if (!ALLOWED_ORIGINS.includes(origin)) return reply({ error: 'forbidden' }, 403);
+    if (!allowed(origin)) return reply({ error: 'forbidden' }, 403);
 
     const params = new URL(request.url).searchParams;
+    if (params.get('tr')) {
+      const q = params.get('tr').slice(0, 60), city = (params.get('trip') || '').slice(0, 40);
+      const names = await localNames(env, q, city).catch(e => { console.log(JSON.stringify({ tr: q, error: String(e.message || e) })); return []; });
+      console.log(JSON.stringify({ tr: q, city, names }));
+      return reply({ names });
+    }
     if (params.get('gmaps')) {
       const out = await resolveGmaps(params.get('gmaps')).catch(e => ({ error: String(e.message || e) }));
       console.log(JSON.stringify({ gmaps: params.get('gmaps').slice(0, 80), ok: Number.isFinite(out.lat) }));
@@ -64,6 +74,31 @@ export default {
     }
   },
 };
+
+// 한국어로 적은 장소 이름 → 지도에서 찾히는 현지 표기와 영어 이름
+const TR_PROMPT = `너는 여행 앱의 지도 검색 도우미야. 한국 사람이 해외 장소 이름을 한국어로 적었어.
+지도 검색에서 그 장소가 나오도록, 그 나라에서 실제로 쓰는 표기(local)와 영어 공식 이름(en)으로 바꿔.
+규칙:
+- 가게·체인점이면 브랜드 이름 + 지점·동네까지. 예: "이치란 라멘 신주쿠" → local "一蘭 新宿", en "Ichiran Shinjuku".
+- 관광지·역·동네도 같은 방식. 예: "청수사" → local "清水寺", en "Kiyomizu-dera".
+- 잘 모르는 이름이면 소리 나는 대로 현지 글자와 영어로 옮겨. 지어낸 지점이나 주소는 붙이지 마.
+- 여행지가 영어권이면 local과 en을 같게 써도 돼.`;
+const TR_SCHEMA = { type: 'object', properties: { local: { type: 'string' }, en: { type: 'string' } }, required: ['local', 'en'] };
+export async function localNames(env, q, city) {
+  const out = await env.AI.run(MODEL, {
+    messages: [
+      { role: 'system', content: TR_PROMPT },
+      { role: 'user', content: `${city ? `[여행지: ${city}]\n` : ''}${q}` },
+    ],
+    response_format: { type: 'json_schema', json_schema: TR_SCHEMA },
+    max_tokens: 120,
+    temperature: 0,
+  });
+  let data = out?.response;
+  if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
+  const clean = v => (typeof v === 'string' ? v.trim().slice(0, 80) : '');
+  return [...new Set([clean(data?.local), clean(data?.en)].filter(n => n && n !== q))];
+}
 
 // 공개 게시물의 임베드(본문 포함) 페이지에서 작성자와 본문을 꺼냅니다.
 export async function readCaption(code) {
