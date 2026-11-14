@@ -1580,7 +1580,8 @@ function loadRates() {
       fxRates = r;
       // v2: 통화가 늘어서 예전 기억은 버려요
       try { localStorage.setItem('gachiga-fx-v2', JSON.stringify(fxRates)); localStorage.removeItem('gachiga-fx'); } catch {}
-      render();
+      if (typingInApp()) clockKey = ''; // 적는 중이면 다 적은 뒤 시계가 다시 그려요
+      else render();
     })
     .catch(() => { fxState.failAt = Date.now(); })
     .finally(() => { fxState.loading = false; });
@@ -2313,8 +2314,10 @@ async function autoLocate(form) {
   if (q.length < 2 || form.dataset.autoLoc !== 'on') return;
   const $out = form.querySelector('.geo-results');
   $out.innerHTML = '<p class="search-msg">위치 찾는 중…</p>';
+  // 여행지 근처부터 찾아요. 안 그러면 도쿄 여행에서 '스타벅스'를 적었을 때 서울 지점이 들어가요.
+  const near = await Promise.race([tripCenter(), new Promise(r => setTimeout(r, 4000))]).catch(() => null);
   let found;
-  try { found = await geocode(q); } catch { found = []; }
+  try { found = await geocode(q, near); } catch { found = []; }
   if (!form.isConnected || form.name.value.trim() !== q || form.dataset.autoLoc !== 'on') return;
   geoResults = found;
   if (!found.length) {
@@ -2519,7 +2522,8 @@ function closeCurPops(except) {
 
 function currencySheet() {
   const cur = currency();
-  openLiveSheet('어떤 통화로 볼까요?', () => `
+  // 다시 그리는 시트(openLiveSheet)로 열면 1분마다 검색칸에 적던 글자가 지워져서, 한 번만 그려요.
+  openSheet('어떤 통화로 볼까요?', `
     ${curList(currency(), 'set-currency')}
     ${state.expenses.length ? '<p class="muted xsmall">적은 지출은 원래 금액 그대로 두고, 고른 돈으로 환산해서 보여줘요. 새 지출은 이 돈으로 먼저 골라져 있어요.</p>' : ''}`);
 }
@@ -2590,7 +2594,7 @@ const actions = {
     const r = pickFound[+d.id];
     if (!r) return;
     box.querySelector('.map')._map?.flyTo({ center: [r.lng, r.lat], zoom: 16, duration: 700 });
-    box.querySelector('.pick-results').innerHTML = `<p class="pick-msg ok">${icon('check', 14)} ${esc(r.name)} 근처로 옮겼어요. 핀을 정확히 맞춰주세요.</p>`;
+    box.querySelector('.pick-results').innerHTML = `<p class="pick-msg ok">${icon('check', 14)} ${esc(koOf(r)?.name || r.name)} 근처로 옮겼어요. 핀을 정확히 맞춰주세요.</p>`;
   },
   'ev-map-pick': async (d, el) => {
     const $f = el.form.querySelector('.place-found');
@@ -2682,6 +2686,10 @@ const actions = {
     box.querySelector('.cur-btn span').textContent = input.dataset.fx ? `${d.id} ${curLabel(d.id)}` : `${curSymbol(d.id)} ${curLabel(d.id)}`;
     box.querySelectorAll('.cur-row').forEach(r => r.classList.toggle('on', r.dataset.id === d.id));
     box.querySelector('.cur-pop').hidden = true;
+    // 다음에 열 때 전체 목록이 보이게 검색어를 지워요
+    const q = box.querySelector('.cur-q');
+    q.value = '';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true })); // 금액 자리수·환율 계산을 다시 해요
   },
   'set-currency': d => {
@@ -2964,7 +2972,13 @@ function tick() {
   if (document.hidden || !state.user) return;
   const now = new Date();
   const key = `${toDateStr(now)} ${now.getHours()}:${now.getMinutes()} ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
-  if (key !== clockKey) { clockKey = key; render(); }
+  if (key !== clockKey && !typingInApp()) { clockKey = key; render(); }
+}
+// 화면(환율 계산기 등)에 적고 있거나 통화 목록을 펼쳐 둔 동안엔 다시 그리지 않아요. 다시 그리면 키보드가 내려가고 목록이 닫혀요.
+// 시계는 다음 번(20초 뒤)에 다시 맞춰요.
+function typingInApp() {
+  const a = document.activeElement;
+  return ($app.contains(a) && a.matches('input, textarea')) || !!$app.querySelector('.cur-pop:not([hidden])');
 }
 setInterval(tick, 20000);
 document.addEventListener('visibilitychange', tick);

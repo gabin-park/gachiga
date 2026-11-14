@@ -200,10 +200,17 @@ export async function koreanLabels(env, rows) {
   // 걸러진 낱말은 한 번만 다시 물어봐요(같은 답이 나오지 않게 조금 다르게).
   const miss = todo.filter(w => !ko.has(w));
   if (miss.length) await ask(miss, 0.4);
-  const say = w => ko.get(w) || w; // 못 옮긴 낱말은 원래 글자 그대로 둬요
+  // 못 옮긴 낱말: 영어 같은 로마자는 읽을 수 있어서 그대로 두고, 한자·가나·타이 문자 등은 그 부분을 빼요.
+  // 안 빼면 '다이토구 아사쿠사 2초메 馬道通り'처럼 한 줄에 섞여요. 다 빠지면 앱이 원래 주소를 보여줘요.
+  const readable = w => !/[^\p{Script=Latin}\p{Script=Hangul}\p{N}\p{P}\p{Zs}]/u.test(w);
+  // AI가 丁目의 숫자를 '삼초메'처럼 한글로 쓸 때가 있어서 '3초메'로 맞춰요(이미 저장된 답도 여기서 고쳐져요).
+  const NUM = { 일: 1, 이: 2, 삼: 3, 사: 4, 오: 5, 육: 6, 칠: 7, 팔: 8, 구: 9 };
+  const chome = t => t.replace(/(^|\s)(십)?([일이삼사오육칠팔구])?초메/g, (all, sp, ten, one) =>
+    ten || one ? `${sp}${(ten ? 10 : 0) + (NUM[one] || 0)}초메` : all);
+  const say = w => chome(ko.get(w) || (readable(w) ? w : ''));
   return split.map(r => ({
     name: ko.get(r.name) || (/[가-힣]/.test(r.name) ? r.name : ''), // 이미 한국어 이름(에펠탑)이면 그대로
-    area: r.parts.reverse().map(p => [p.word && say(p.word), p.num].filter(Boolean).join(' ')).join(' ').slice(0, 80),
+    area: r.parts.reverse().filter(p => !p.word || say(p.word)).map(p => [p.word && say(p.word), p.num].filter(Boolean).join(' ')).join(' ').slice(0, 80),
   }));
 }
 
