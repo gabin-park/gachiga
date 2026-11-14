@@ -66,7 +66,8 @@ service cloud.firestore {
           && request.resource.data.members.toSet() == resource.data.members.toSet().difference([me()].toSet());
       }
 
-      allow read: if signedIn() && (me() in resource.data.members || me() in invited());
+      // 없는 여행(삭제됨)은 읽어도 빈 결과만 받아요. 그래야 앱이 '삭제됐어요'와 '내보내졌어요'를 구분해요.
+      allow read: if signedIn() && (resource == null || me() in resource.data.members || me() in invited());
       allow create: if signedIn()
         && request.resource.data.ownerId == me()
         && request.resource.data.members == [me()];

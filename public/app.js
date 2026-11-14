@@ -364,6 +364,8 @@ function openTrip(id) {
     location.replace('#/');
   });
   const fail = e => leave(errorText(e));
+  // 일정·장소·지출 쪽 권한 오류는 여행 문서 쪽이 같이 알려줘요(삭제됐는지, 내보내졌는지). 여기서 먼저 띄우면 이유가 틀릴 수 있어요.
+  const itemsFail = e => { if (e?.code !== 'permission-denied') fail(e); };
   unsubTrip = [
     store.watchTrip(id, t => {
       if (!t) return leave('여행이 삭제됐어요');
@@ -371,7 +373,7 @@ function openTrip(id) {
       state.trip = t;
       render();
     }, fail),
-    ...KINDS.map(k => store.watchItems(id, k, items => { state[k] = items; render(); }, fail)),
+    ...KINDS.map(k => store.watchItems(id, k, items => { state[k] = items; render(); }, itemsFail)),
   ];
 }
 
@@ -1700,10 +1702,12 @@ function tripSheet(t) {
     const data = { name: d.name.trim(), startDate: d.startDate, endDate: d.endDate || d.startDate, from: code(d.from), to: code(d.to) };
     if (t) return store.updateTrip(t.id, data);
     const { id, done } = store.createTrip(me(), data);
-    location.hash = `#/trip/${id}`;
-    // 만들자마자 멤버를 초대할 수 있게 멤버 화면을 띄웁니다.
-    setTimeout(membersSheet, 400);
-    return done;
+    // 서버에 저장된 뒤에 들어가요. 먼저 들어가면 서버엔 아직 없는 여행이라 접근 권한 오류가 나요.
+    // 들어가면 바로 멤버를 초대할 수 있게 멤버 화면을 띄웁니다.
+    return done.then(() => {
+      location.hash = `#/trip/${id}`;
+      setTimeout(membersSheet, 400);
+    });
   }, {
     danger: !t ? null : owner ? {
       label: '여행 삭제',
