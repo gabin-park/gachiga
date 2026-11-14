@@ -628,7 +628,7 @@ function viewHome() {
     ${trips.length ? `
       <div class="section-head">
         <h2 class="section-title">내 여행 <span class="count">${trips.length}</span></h2>
-        <button class="btn-sm primary" data-action="new-trip">${icon('plus', 15)} 새 여행</button>
+        <button class="btn-sm soft" data-action="new-trip">${icon('plus', 15)} 새 여행</button>
       </div>
       ${trips.map(ticket).join('')}` : pastN ? `
       <div class="empty">

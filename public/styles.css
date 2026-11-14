@@ -440,6 +440,7 @@ textarea { resize: none; }
   box-shadow: inset 0 0 0 1px var(--line);
 }
 .btn-sm.primary { background: var(--primary); color: #fff; box-shadow: none; }
+.btn-sm.soft { background: var(--primary-soft); color: var(--primary); box-shadow: none; }
 .btn-sm.subtle { background: transparent; color: var(--muted); }
 .btn-sm.subtle-danger { background: transparent; color: var(--minus); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--minus) 35%, transparent); }
 .btn.ghost { background: transparent; }
