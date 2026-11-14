@@ -109,35 +109,55 @@ export async function localNames(env, q, city) {
   return { names: [...new Set([clean(data?.local), clean(data?.en)].filter(n => n && n !== q))], city: clean(data?.city).slice(0, 40) };
 }
 
-// 현지어 장소 후보 → 한국어 이름과 짧은 동네 이름
-const KO_PROMPT = `너는 여행 앱 도우미야. 해외 지도 검색 후보(이름과 주소, 어느 나라 말이든)를 한국 사람이 읽을 수 있게 한국어로 바꿔.
-각 줄마다 { name, area }를 같은 순서, 같은 개수로 돌려줘.
-- name: 장소 이름을 한국에서 부르는 말로. 브랜드는 한국 표기(スターバックス → 스타벅스), 고유 이름은 현지 발음을 한국어로(清水寺 → 기요미즈데라, 一蘭 → 이치란, 神宮前 → 진구마에). 일본 한자는 일본어 발음으로 읽어. 이미 한국어나 쉬운 영어면 그대로.
-- area: 그 장소를 찾아갈 수 있게 주소를 한국어로. 큰 지역에서 작은 순서로 구·동네·길 이름과 번지까지 넣고, 나라·주(도)·우편번호는 빼.
-  - 일본: 주소 맨 앞의 "24 12" 같은 숫자 두 개는 번지(24-12). 예: "3 4, 神宮前四丁目, 渋谷区" → "시부야구 진구마에 4초메 3-4"
-  - 그 밖의 나라: 예: "Rue de Rivoli 99, 1er Arrondissement, Paris" → "파리 1구 리볼리 거리 99", "Pike Street 1912, Seattle" → "시애틀 파이크 스트리트 1912"
-  - 같은 체인점을 동네와 번지로 구분하려는 거라 주소에 있는 동네·번지는 꼭 넣어. 주소가 없으면 빈 문자열.
-- 지어내지 마. 주어진 글자만 옮겨.`;
+// 현지어 장소 후보 → 한국어 이름과 주소
+// AI에게 주소 전체를 맡기면 동네·번지를 자주 빼먹어요. 그래서 AI는 낱말 번역만 하고,
+// 주소를 나누고 순서를 맞추고 번지 숫자를 붙이는 일은 여기서 코드로 해요.
+const KO_PROMPT = `너는 여행 앱 도우미야. 해외 지도에 나온 낱말(가게 이름, 브랜드, 구·동네·길 이름, 도시 이름)을 한국 사람이 읽을 수 있게 한국어로 옮겨.
+받은 낱말마다 { src, ko }를 하나씩 돌려줘. src는 받은 낱말 그대로.
+- 브랜드는 한국 표기(スターバックス → 스타벅스, McDonald's → 맥도날드).
+- 고유 이름은 현지 발음을 한국어로(清水寺 → 기요미즈데라, 一蘭 → 이치란, 神宮前 → 진구마에, Rue de Rivoli → 리볼리 거리, Pike Street → 파이크 스트리트). 일본 한자는 일본어 발음으로 읽어.
+- 일본 행정 이름: 渋谷区 → 시부야구, 成田市 → 나리타시, 神宮前四丁目 → 진구마에 4초메, 宇田川町 → 우다가와초.
+- 프랑스 구: 1er Arrondissement → 1구.
+- 이미 한국어거나 쉬운 영어면 그대로. 지어내거나 빼지 말고 받은 낱말만 옮겨.`;
 const KO_SCHEMA = {
   type: 'object',
-  properties: { items: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, area: { type: 'string' } }, required: ['name', 'area'] } } },
+  properties: { items: { type: 'array', items: { type: 'object', properties: { src: { type: 'string' }, ko: { type: 'string' } }, required: ['src', 'ko'] } } },
   required: ['items'],
 };
+const POSTCODE = /^[A-Z]{0,2}\d{3}-?\d{4}$|^\d{4,6}(-\d{4})?$|^[A-Z]\d[A-Z] ?\d[A-Z]\d$/i;
+const NUMBER = /^\d[\d\s-]*[a-z]?$/i;
+// "3 4, 神宮前四丁目, 渋谷区, 東京都, 日本" → 작은 곳부터 [번지, 동네, 구] (나라·주·우편번호·가게 이름은 빼요)
+function addressParts(name, address) {
+  let parts = address.split(',').map(p => p.trim()).filter(p => p && p !== name && !POSTCODE.test(p));
+  parts = parts.filter((p, i) => !parts.slice(0, i).some(q => q.startsWith(p))); // 西原三丁目 다음의 西原처럼 겹치는 건 빼요
+  if (parts.length > 1) parts = parts.slice(0, -1); // 나라
+  if (parts.length > 1) parts = parts.slice(0, -1); // 주·도
+  return parts.slice(0, 4).map(p => {
+    if (NUMBER.test(p)) return { num: p.replace(/\s+/g, '-') }; // 일본 번지 "24 12" → 24-12
+    const m = p.match(/^(.*\D)\s+(\d[\w-]*)$/); // "Pike Street 1912" → 길 이름 + 번지
+    return m ? { word: m[1], num: m[2] } : { word: p };
+  });
+}
 export async function koreanLabels(env, rows) {
-  const out = await env.AI.run(MODEL, {
+  const split = rows.map(([name, address = '']) => ({ name, parts: addressParts(name, address) }));
+  const words = [...new Set(split.flatMap(r => [r.name, ...r.parts.map(p => p.word)]).filter(w => w && /\p{L}/u.test(w) && !/[가-힣]/.test(w)))].slice(0, 40);
+  const out = words.length ? await env.AI.run(MODEL, {
     messages: [
       { role: 'system', content: KO_PROMPT },
-      { role: 'user', content: rows.map(([name, address = ''], i) => `${i + 1}. ${name} / ${address}`).join('\n') },
+      { role: 'user', content: words.join('\n') },
     ],
     response_format: { type: 'json_schema', json_schema: KO_SCHEMA },
-    max_tokens: 600,
+    max_tokens: 900,
     temperature: 0,
-  });
+  }) : null;
   let data = out?.response;
   if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
-  const clean = v => (typeof v === 'string' ? v.trim().slice(0, 60) : '');
-  const items = Array.isArray(data?.items) ? data.items : [];
-  return rows.map((_, i) => ({ name: clean(items[i]?.name), area: clean(items[i]?.area) }));
+  const ko = new Map((Array.isArray(data?.items) ? data.items : []).map(i => [String(i?.src || '').trim(), String(i?.ko || '').trim().slice(0, 40)]));
+  const say = w => ko.get(w) || w; // 못 옮긴 낱말은 원래 글자 그대로 둬요
+  return split.map(r => ({
+    name: ko.get(r.name) || '',
+    area: r.parts.reverse().map(p => [p.word && say(p.word), p.num].filter(Boolean).join(' ')).join(' ').slice(0, 80),
+  }));
 }
 
 // 공개 게시물의 임베드(본문 포함) 페이지에서 작성자와 본문을 꺼냅니다.
