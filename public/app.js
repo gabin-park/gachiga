@@ -528,8 +528,7 @@ function homeFirstCard() {
   if (!home?.startsWith('ios')) return '';
   return `
     <div class="home-first">
-      <b>홈 화면에 두고 쓸 건가요?</b>
-      <p>홈 화면에 먼저 추가하고 거기서 로그인하면,<br>로그인을 한 번만 하면 돼요.</p>
+      <b>앱처럼 쓰려면 먼저 홈 화면에 추가해주세요.</b>
       <p class="home-first-steps">${guideLine(HOME_STEPS[home][0].replace(/,$/, ''))}</p>
     </div>`;
 }
