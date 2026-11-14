@@ -2,7 +2,8 @@
 // GET /?url=<인스타 게시물·릴스 링크>
 //   → { author, caption, places: [{ name, query, city, category, address, note }] }
 // GET /?tr=<한국어로 적은 장소 이름>&trip=<여행지 도시>
-//   → { names: ['一蘭 新宿', 'Ichiran Shinjuku'] }  지도 검색이 현지어만 알아서, 현지 표기·영어 이름으로 바꿔 줘요.
+//   → { names: ['一蘭 新宿', 'Ichiran Shinjuku'], city: 'Tokyo' }  지도 검색이 현지어만 알아서, 현지 표기·영어 이름으로 바꿔 줘요.
+//     city는 그 장소가 있는 도시(영어). 여행지를 모를 때 그 도시 근처에서 찾는 데 써요.
 // GET /?gmaps=<구글맵 공유 링크>
 //   → { url, lat, lng, name }  짧은 링크(maps.app.goo.gl)를 열어 좌표를 읽어 줘요(사파리에서는 직접 못 열어서).
 // 1) 인스타 공식 임베드 페이지에서 본문 글(캡션)을 읽고
@@ -40,9 +41,9 @@ export default {
     const params = new URL(request.url).searchParams;
     if (params.get('tr')) {
       const q = params.get('tr').slice(0, 60), city = (params.get('trip') || '').slice(0, 40);
-      const names = await localNames(env, q, city).catch(e => { console.log(JSON.stringify({ tr: q, error: String(e.message || e) })); return []; });
-      console.log(JSON.stringify({ tr: q, city, names }));
-      return reply({ names });
+      const out = await localNames(env, q, city).catch(e => { console.log(JSON.stringify({ tr: q, error: String(e.message || e) })); return { names: [], city: '' }; });
+      console.log(JSON.stringify({ tr: q, trip: city, ...out }));
+      return reply(out);
     }
     if (params.get('gmaps')) {
       const out = await resolveGmaps(params.get('gmaps')).catch(e => ({ error: String(e.message || e) }));
@@ -82,8 +83,9 @@ const TR_PROMPT = `너는 여행 앱의 지도 검색 도우미야. 한국 사�
 - 가게·체인점이면 브랜드 이름 + 지점·동네까지. 예: "이치란 라멘 신주쿠" → local "一蘭 新宿", en "Ichiran Shinjuku".
 - 관광지·역·동네도 같은 방식. 예: "청수사" → local "清水寺", en "Kiyomizu-dera".
 - 잘 모르는 이름이면 소리 나는 대로 현지 글자와 영어로 옮겨. 지어낸 지점이나 주소는 붙이지 마.
-- 여행지가 영어권이면 local과 en을 같게 써도 돼.`;
-const TR_SCHEMA = { type: 'object', properties: { local: { type: 'string' }, en: { type: 'string' } }, required: ['local', 'en'] };
+- 여행지가 영어권이면 local과 en을 같게 써도 돼.
+- city: 그 장소가 있는 도시의 영어 이름(예: "Tokyo", "Kyoto"). [여행지]가 있으면 보통 그 도시. 모르면 빈 문자열.`;
+const TR_SCHEMA = { type: 'object', properties: { local: { type: 'string' }, en: { type: 'string' }, city: { type: 'string' } }, required: ['local', 'en', 'city'] };
 export async function localNames(env, q, city) {
   const out = await env.AI.run(MODEL, {
     messages: [
@@ -97,7 +99,7 @@ export async function localNames(env, q, city) {
   let data = out?.response;
   if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
   const clean = v => (typeof v === 'string' ? v.trim().slice(0, 80) : '');
-  return [...new Set([clean(data?.local), clean(data?.en)].filter(n => n && n !== q))];
+  return { names: [...new Set([clean(data?.local), clean(data?.en)].filter(n => n && n !== q))], city: clean(data?.city).slice(0, 40) };
 }
 
 // 공개 게시물의 임베드(본문 포함) 페이지에서 작성자와 본문을 꺼냅니다.
