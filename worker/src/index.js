@@ -24,6 +24,8 @@ const GMAPS_RE = /^https:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|(?:www\.)?googl
 const IG_RE = /https?:\/\/(?:www\.)?instagram\.com\/(?:[\w.]+\/)?(?:p|reels?|tv)\/([\w-]+)/i;
 const CATEGORIES = ['food', 'cafe', 'sight', 'stay', 'shop', 'etc'];
 export const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+// 지도 검색어·주소 번역용. 짧은 번역은 이쪽이 3배쯤 빠르고, 일본 밖 지명(침사추이, 호이안)도 더 잘 알아들어요.
+export const FAST_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 
 export default {
@@ -49,7 +51,7 @@ export default {
     if (params.get('tr')) {
       const q = params.get('tr').slice(0, 60), city = (params.get('trip') || '').slice(0, 40);
       // 같은 여행지에서 같은 말로 찾은 적이 있으면(누구든) 저장해 둔 번역을 바로 줘요.
-      const kvKey = `tr:${city}|${q}`;
+      const kvKey = `tr6:${city}|${q}`; // tr5: 동네(area)까지 들어 있고, 빠른 모델로 바꾼 번역
       const saved = await env.KO_WORDS?.get(kvKey, 'json').catch(() => null);
       if (saved) return reply(saved);
       const out = await localNames(env, q, city).catch(e => { console.log(JSON.stringify({ tr: q, error: String(e.message || e) })); return { names: [], city: '' }; });
@@ -95,11 +97,14 @@ const TR_PROMPT = `너는 여행 앱의 지도 검색 도우미야. 한국 사�
 - 가게·체인점이면 브랜드 이름 + 지점·동네까지. 예: "이치란 라멘 신주쿠" → local "一蘭 新宿", en "Ichiran Shinjuku".
 - 관광지·역·동네도 같은 방식. 예: "청수사" → local "清水寺", en "Kiyomizu-dera".
 - 잘 모르는 이름이면 소리 나는 대로 현지 글자와 영어로 옮겨. 지어낸 지점이나 주소는 붙이지 마.
+- local은 그 장소가 있는 나라의 말로(일본 → 일본어, 프랑스 → 프랑스어 "Tour Eiffel", 태국 → 태국어). 한자는 일본·중국·대만·홍콩 장소일 때만 써.
 - 여행지가 영어권이면 local과 en을 같게 써도 돼.
-- city: 그 장소가 있는 도시의 영어 이름(예: "Tokyo", "Kyoto"). [여행지]가 있으면 보통 그 도시. 모르면 빈 문자열.`;
-const TR_SCHEMA = { type: 'object', properties: { local: { type: 'string' }, en: { type: 'string' }, city: { type: 'string' } }, required: ['local', 'en', 'city'] };
+- city: 그 장소가 있는 도시의 영어 이름(예: "Tokyo", "Kyoto"). [여행지]가 있으면 보통 그 도시. 모르면 빈 문자열.
+- country: 그 장소가 있는 나라의 영어 이름(예: "Japan", "Spain").
+- area: 적은 말에 동네·지역 이름이 들어 있으면 그 동네를 현지 표기로(예: "돈키호테 시부야" → "渋谷", "스타벅스 소호" → "SoHo"). [여행지]와 다른 근처 도시를 적었어도 그 도시를 넣어(여행지 다낭에서 "반미 호이안" → "Hội An"). 동네 이름이 없거나 장소 이름 자체가 동네면 빈 문자열.`;
+const TR_SCHEMA = { type: 'object', properties: { local: { type: 'string' }, en: { type: 'string' }, city: { type: 'string' }, country: { type: 'string' }, area: { type: 'string' } }, required: ['local', 'en', 'city', 'country', 'area'] };
 export async function localNames(env, q, city) {
-  const out = await env.AI.run(MODEL, {
+  const out = await env.AI.run(FAST_MODEL, {
     messages: [
       { role: 'system', content: TR_PROMPT },
       { role: 'user', content: `${city ? `[여행지: ${city}]\n` : ''}${q}` },
@@ -111,7 +116,12 @@ export async function localNames(env, q, city) {
   let data = out?.response;
   if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
   const clean = v => (typeof v === 'string' ? v.trim().slice(0, 80) : '');
-  return { names: [...new Set([clean(data?.local), clean(data?.en)].filter(n => n && n !== q))], city: clean(data?.city).slice(0, 40) };
+  // AI가 가끔 다른 나라 글자로 옮겨요(사그라다 파밀리아 → サグラダ・ファミリア). 그 나라 글자가 아니면 현지 이름은 버리고 영어 이름만 써요.
+  const country = clean(data?.country);
+  const wrongScript = t => (/[\u3040-\u30ff]/.test(t) && country !== 'Japan') || (/[\u4e00-\u9fff]/.test(t) && !/^(Japan|China|Taiwan|Hong Kong|Macau|Macao)$/.test(country)) || /[가-힣]/.test(t);
+  const local = wrongScript(clean(data?.local)) ? '' : clean(data?.local);
+  const area = wrongScript(clean(data?.area)) ? '' : clean(data?.area);
+  return { names: [...new Set([local, clean(data?.en)].filter(n => n && n !== q))], city: clean(data?.city).slice(0, 40), area: area.slice(0, 40) };
 }
 
 // 현지어 장소 후보 → 한국어 이름과 주소
@@ -123,6 +133,7 @@ const KO_PROMPT = `너는 여행 앱 도우미야. 해외 지도에 나온 낱�
 - 고유 이름은 현지 발음을 한국어로(清水寺 → 기요미즈데라, 一蘭 → 이치란, 神宮前 → 진구마에, Rue de Rivoli → 리볼리 거리, Pike Street → 파이크 스트리트). 일본 한자는 일본어 발음으로 읽어.
 - 일본 행정 이름: 渋谷区 → 시부야구, 成田市 → 나리타시, 神宮前四丁目 → 진구마에 4초메, 港区 → 미나토구, 中央区 → 주오구, 宇田川町 → 우다가와초, 新宿中央通り → 신주쿠 주오도리(通り는 도리). 한자·가나를 남기지 마.
 - 프랑스 구: 1er Arrondissement → 1구.
+- 중국·대만·홍콩 가게는 한국에서 부르는 이름으로(添好運 → 팀호완, 鼎泰豐 → 딘타이펑). 베트남어는 소리대로(Phượng → 프엉, Chợ Hàn → 한 시장, Chợ는 시장).
 - 이미 한국어거나 쉬운 영어면 그대로. 지어내거나 빼지 말고 받은 낱말만 옮겨.`;
 const KO_SCHEMA = {
   type: 'object',
@@ -135,7 +146,8 @@ const CLEAN = /^[가-힣a-zA-Z0-9\s.,'&·()\-]+$/;
 const NUMBER = /^\d[\d\s-]*[a-z]?$/i;
 // "3 4, 神宮前四丁目, 渋谷区, 東京都, 日本" → 작은 곳부터 [번지, 동네, 구] (나라·주·우편번호·가게 이름은 빼요)
 function addressParts(name, address) {
-  let parts = address.split(',').map(p => p.trim()).filter(p => p && p !== name && !POSTCODE.test(p));
+  // 베트남 주소의 '주민 그룹(Tổ dân phố)'은 길 찾기에 안 쓰여서 빼요.
+  let parts = address.split(',').map(p => p.trim()).filter(p => p && p !== name && !POSTCODE.test(p) && !/^Tổ dân phố/i.test(p));
   parts = parts.filter((p, i) => !parts.slice(0, i).some(q => q.startsWith(p))); // 西原三丁目 다음의 西原처럼 겹치는 건 빼요
   if (parts.length > 1) parts = parts.slice(0, -1); // 나라
   if (parts.length > 1) parts = parts.slice(0, -1); // 주·도
@@ -149,7 +161,7 @@ export async function koreanLabels(env, rows) {
   const split = rows.map(([name, address = '']) => ({ name, parts: addressParts(name, address) }));
   const words = [...new Set(split.flatMap(r => [r.name, ...r.parts.map(p => p.word)]).filter(w => w && /\p{L}/u.test(w) && !/[가-힣]/.test(w)))].slice(0, 40);
   // 누가 한 번 옮긴 낱말은 KV에 모아 두고 다음부터 AI 없이 바로 써요.
-  const kvKey = w => `ko4:${w}`.slice(0, 480); // ko4: 번호·한자·이상한 글자·영어가 섞인 예전 답은 버려요
+  const kvKey = w => `ko6:${w}`.slice(0, 480); // ko6: 빠른 모델로 바꾸고 답 검사를 늘리면서 예전 답은 버려요
   const saved = env.KO_WORDS ? await Promise.all(words.map(w => env.KO_WORDS.get(kvKey(w)).catch(() => null))) : [];
   const ko = new Map(words.map((w, i) => [w, saved[i]]).filter(([, v]) => v));
   const todo = words.filter(w => !ko.has(w));
@@ -160,7 +172,7 @@ export async function koreanLabels(env, rows) {
     return Promise.all(groups.map(group => askGroup(group, temperature)));
   };
   const askGroup = async (group, temperature) => {
-    const out = await env.AI.run(MODEL, {
+    const out = await env.AI.run(FAST_MODEL, {
       messages: [
         { role: 'system', content: KO_PROMPT },
         { role: 'user', content: group.map((w, i) => `${i + 1}. ${w}`).join('\n') },
@@ -178,7 +190,8 @@ export async function koreanLabels(env, rows) {
     await Promise.all(group.map((w, i) => {
       // 한글·영문·숫자로만 된 답만 써요. 한자·가나가 남거나(중앙通り) 엉뚱한 글자가 섞이면(민ато구)
       // 원래 글자로 두고 저장하지 않아요. 다음에 다시 물어봐요.
-      if (!CLEAN.test(got[i]) || (CJK.test(w) && /[a-z]/i.test(got[i]))) return null; // 일본어를 영어로 바꾼 답(銀座 → ginza)도 버려요
+      // 일본어를 영어로 바꾼 답(銀座 → ginza), 한 낱말에 한글과 영문이 섞인 답(응uyen)도 버려요
+      if (!CLEAN.test(got[i]) || (CJK.test(w) && /[a-z]/i.test(got[i])) || /[가-힣][a-z]|[a-z][가-힣]/i.test(got[i])) return null;
       ko.set(w, got[i]);
       return env.KO_WORDS?.put(kvKey(w), got[i]).catch(() => {});
     }));
@@ -189,7 +202,7 @@ export async function koreanLabels(env, rows) {
   if (miss.length) await ask(miss, 0.4);
   const say = w => ko.get(w) || w; // 못 옮긴 낱말은 원래 글자 그대로 둬요
   return split.map(r => ({
-    name: ko.get(r.name) || '',
+    name: ko.get(r.name) || (/[가-힣]/.test(r.name) ? r.name : ''), // 이미 한국어 이름(에펠탑)이면 그대로
     area: r.parts.reverse().map(p => [p.word && say(p.word), p.num].filter(Boolean).join(' ')).join(' ').slice(0, 80),
   }));
 }

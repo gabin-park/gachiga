@@ -1192,53 +1192,69 @@ function roadPath(a, b) {
 // 못 찾으면 끝말을 띄어 한 번 더 찾아봅니다.
 const PLACE_SUFFIX = /(타워|역|공원|신사|시장|거리|성|사원|절|해변|비치|공항|호텔|카페|박물관|미술관|전망대|온천|다리|섬|폭포|동물원|수족관|스카이트리|몰|백화점)$/;
 async function geocode(q, near) {
+  // 해외 장소를 한국어로 적었는데 여행지 근처에서(여행지를 모르면 아예) 못 찾으면, 현지 표기·영어 이름으로 바꿔서 찾아요.
+  // 지도 검색은 유명한 곳 말고는 한국어 이름을 몰라요. 가까운 결과가 있으면 그것만, 없으면 찾은 것 전부를 보여줘요.
+  const viaLocal = async local => {
+    const search = async at => {
+      let list = (await Promise.all(local.names.map(name => geocodeOnce(name, at).catch(() => [])))).flat(); // 현지어·영어 이름을 동시에 찾아요
+      // 두 검색 결과를 합친 뒤 다시 줄 세워요. 안 그러면 영어로만 찾힌 곳(시부야의 Mega Don Quijote)이 뒤로 밀려 잘려요.
+      if (at) list.sort((a, b) => a.score - b.score);
+      list = list.filter((r, i) => !list.slice(0, i).some(o => o.name === r.name && kmBetween(o, r) < 0.5));
+      return { list, close: at ? list.filter(r => r.km < 300) : list };
+    };
+    // '돈키호테 시부야'처럼 동네를 적었으면 그 동네에서 가까운 지점부터 보여줘요.
+    // 동네가 없으면 여행지(또는 지금 보는 지도) 근처에서 찾고, 없으면 AI가 알려준 도시 근처에서 찾아요.
+    // 기준이 없으면 다른 도시의 같은 이름(체인점·동네)이 먼저 나와요.
+    // 기준 동네는 동네·도시로 찾은 결과를 먼저 써요. 가까운 순으로만 고르면 다낭의 'Hội An' 길을 호이안으로 알아요.
+    const spots = local.area ? (await geocodeOnce(local.area, near).catch(() => [])).filter(r => !near || r.km < 300) : [];
+    const spot = spots.find(r => /^(place|boundary):/.test(r.kind)) || spots.find(r => !/^highway:/.test(r.kind));
+    const at = spot ? { lat: spot.lat, lng: spot.lng } : near;
+    let hit = at ? await search(at) : { list: [], close: [] };
+    if (!hit.close.length) {
+      const city = await cityCenter(local.city);
+      if (city || !near) hit = await search(city);
+    }
+    return (hit.close.length ? hit.close : hit.list).slice(0, 8);
+  };
+  // 해외 여행(또는 여행지를 아직 안 정함)에서 한국어로 찾으면, 번역한 이름으로 찾기를 한국어 검색과 동시에 시작해 둬요.
+  // 한국어 검색이 끝날 때까지 기다렸다 시작하면 2초쯤 더 걸려요.
+  const abroad = airportByCode(tripRoute(state.trip || {}).to)?.country !== '한국';
+  const early = /[가-힣]/.test(q) && abroad ? localNames(q).then(viaLocal).catch(() => []) : null;
   let found = await geocodeOnce(q, near);
   const spaced = !/\s/.test(q) && PLACE_SUFFIX.test(q) && q.replace(PLACE_SUFFIX, ' $1');
   if (!found.length && spaced) {
     await new Promise(r => setTimeout(r, 1000)); // 오픈스트리트맵 검색은 1초에 한 번까지
     found = await geocodeOnce(spaced, near);
   }
-  // 해외 장소를 한국어로 적었는데 여행지 근처에서(여행지를 모르면 아예) 못 찾으면, 현지 표기·영어 이름으로 바꿔서 한 번 더 찾아요.
-  // 지도 검색은 유명한 곳 말고는 한국어 이름을 몰라요. 가까운 결과가 있으면 그것만, 없으면 찾은 것 전부를 보여줘요.
   // 이름이 비슷하기만 한 곳(예: '시부야' → 경주의 '시부걸')은 찾은 것으로 치지 않아요.
   const words = q.split(/\s+/).filter(w => w.length >= 2);
   const sameName = r => words.some(w => r.name.replace(/\s/g, '').includes(w));
   if (/[가-힣]/.test(q) && !found.some(r => sameName(r) && (!near || r.km < 300))) {
-    const local = await localNames(q);
-    const search = async at => {
-      let list = [];
-      for (const name of local.names) list.push(...await geocodeOnce(name, at).catch(() => []));
-      list = list.filter((r, i) => !list.slice(0, i).some(o => o.name === r.name && kmBetween(o, r) < 0.5));
-      return { list, close: at ? list.filter(r => r.km < 300) : list };
-    };
-    // 여행지(또는 지금 보는 지도) 근처에서 먼저 찾고, 없으면 AI가 알려준 도시 근처에서 찾아요.
-    // 기준이 없으면 다른 도시의 같은 이름(체인점·동네)이 먼저 나와요.
-    let hit = near ? await search(near) : { list: [], close: [] };
-    if (!hit.close.length) {
-      const city = await cityCenter(local.city);
-      if (city || !near) hit = await search(city);
-    }
-    if (hit.list.length) found = (hit.close.length ? hit.close : hit.list).slice(0, 8);
+    const other = await (early || localNames(q).then(viaLocal).catch(() => []));
+    if (other.length) found = other;
   }
+  // 현지어 결과가 잠깐 보였다가 바뀌지 않게, 한국어 이름을 3초까지 기다렸다가 보여줘요.
+  // 3초가 넘으면 현지어로 먼저 보여주고, 도착하면 그때 바꿔요(koreanize).
+  await Promise.race([koFetch(found), new Promise(r => setTimeout(r, 3000))]);
   return found;
 }
 
-// 한국어 장소 이름 → { names: 현지 표기와 영어 이름, city: 그 장소의 도시(영어) } (가치가 서버의 무료 AI).
+// 한국어 장소 이름 → { names: 현지 표기와 영어 이름, city: 그 장소의 도시(영어), area: 적은 말 속 동네(현지 표기) } (가치가 서버의 무료 AI).
 // 한 번 바꾼 이름은 이 폰에 기억해 둬요.
 let localNameMemo = null;
 async function localNames(q) {
   if (!IG_API) return { names: [], city: '' };
   const trip = tripRoute(state.trip || {}).toCity, key = `${trip}|${q}`;
-  try { localNameMemo ||= JSON.parse(localStorage.getItem('gachiga-local-names-v2') || '{}'); } catch { localNameMemo = {}; }
+  try { localNameMemo ||= JSON.parse(localStorage.getItem('gachiga-local-names-v3') || '{}'); } catch { localNameMemo = {}; }
   if (localNameMemo[key]) return localNameMemo[key];
   const res = await fetch(`${IG_API}?tr=${encodeURIComponent(q)}&trip=${encodeURIComponent(trip)}`).catch(() => null);
   const data = res?.ok ? await res.json().catch(() => ({})) : {};
-  const out = { names: (data.names || []).slice(0, 2), city: data.city || '' };
+  const out = { names: (data.names || []).slice(0, 2), city: data.city || '', area: data.area || '' };
   if (out.names.length) {
     localNameMemo[key] = out;
     const keys = Object.keys(localNameMemo);
     keys.slice(0, Math.max(0, keys.length - 300)).forEach(k => delete localNameMemo[k]); // 오래된 것부터 300개만 남겨요
-    try { localStorage.setItem('gachiga-local-names-v2', JSON.stringify(localNameMemo)); localStorage.removeItem('gachiga-local-names'); } catch {}
+    try { localStorage.setItem('gachiga-local-names-v3', JSON.stringify(localNameMemo)); localStorage.removeItem('gachiga-local-names-v2'); } catch {}
   }
   return out;
 }
@@ -1247,27 +1263,35 @@ const geoItem = (r, action, id) => `
   <button type="button" class="geo-item" data-action="${action}" data-id="${id}">
     ${icon('pin', 16)}<span><b>${esc(r.name)}</b><small><span class="geo-addr">${esc(r.address)}</span></small></span>
   </button>`;
-// 해외 후보(한글이 하나도 없는 후보)는 어느 나라든 AI로 한국어 이름과 주소를 받아 바꿔 보여줘요.
+// 해외 후보는 어느 나라든 AI로 한국어 이름과 주소를 받아 바꿔 보여줘요.
+// 이름이 한국어여도(에펠탑) 주소에 현지 글자가 섞여 있으면 주소를 정리해서 바꿔요.
 // 원래 이름은 아래에 작게 남겨요(현지에서 간판 찾을 때). 실패하면 그냥 현지어 그대로 둬요.
-const FOREIGN = { test: text => !/[가-힣]/.test(text) };
+const isForeign = r => !/[가-힣]/.test(r.name) || /[^\s\d가-힣,.()-]/.test(r.address || '');
 let koMemo = null;
-const koOf = r => koMemo?.[`${r.name}\t${r.address}`];
-async function koreanize($box, list) {
-  const key = r => `${r.name}\t${r.address}`;
+const koKey = r => `${r.name}\t${r.address}`;
+const koOf = r => koMemo?.[koKey(r)];
+const koPending = new Map(); // 지금 서버에 묻고 있는 후보 → 그 요청
+// 한국어 이름·주소를 받아 기억해 둬요. 이미 묻고 있는 후보는 다시 묻지 않고 그 요청을 같이 기다려요.
+function koFetch(list) {
   // v2: 주소를 코드로 맞추게 바꿔서, 동네·번지가 빠진 예전 기억은 버려요
   try { koMemo ||= JSON.parse(localStorage.getItem('gachiga-ko-labels-v2') || '{}'); } catch { koMemo = {}; }
-  const todo = [...new Set(list.filter(r => FOREIGN.test(r.name + r.address) && !koMemo[key(r)]).map(key))].slice(0, 8);
+  const todo = [...new Set(list.filter(r => isForeign(r) && !koMemo[koKey(r)] && !koPending.has(koKey(r))).map(koKey))].slice(0, 8);
   if (todo.length && IG_API) {
-    const res = await fetch(`${IG_API}?ko=${encodeURIComponent(todo.join('\n'))}`).catch(() => null);
-    const items = res?.ok ? (await res.json().catch(() => ({}))).items || [] : [];
-    todo.forEach((k, i) => { if (items[i]?.name) koMemo[k] = items[i]; });
-    const keys = Object.keys(koMemo);
-    keys.slice(0, Math.max(0, keys.length - 500)).forEach(k => delete koMemo[k]); // 오래된 것부터 500개만 남겨요
-    try { localStorage.setItem('gachiga-ko-labels-v2', JSON.stringify(koMemo)); localStorage.removeItem('gachiga-ko-labels'); } catch {}
+    const req = fetch(`${IG_API}?ko=${encodeURIComponent(todo.join('\n'))}`).then(res => res.ok ? res.json() : {}).catch(() => ({})).then(({ items = [] }) => {
+      todo.forEach((k, i) => { if (items[i]?.name) koMemo[k] = items[i]; });
+      const keys = Object.keys(koMemo);
+      keys.slice(0, Math.max(0, keys.length - 500)).forEach(k => delete koMemo[k]); // 오래된 것부터 500개만 남겨요
+      try { localStorage.setItem('gachiga-ko-labels-v2', JSON.stringify(koMemo)); localStorage.removeItem('gachiga-ko-labels'); } catch {}
+    }).finally(() => todo.forEach(k => koPending.delete(k)));
+    todo.forEach(k => koPending.set(k, req));
   }
+  return Promise.all([...new Set(list.map(r => koPending.get(koKey(r))).filter(Boolean))]);
+}
+async function koreanize($box, list) {
+  await koFetch(list);
   if (!$box.isConnected) return;
   $box.querySelectorAll('.geo-item[data-id]').forEach(btn => {
-    const r = list[btn.dataset.id], ko = r && koMemo[key(r)];
+    const r = list[btn.dataset.id], ko = r && koOf(r);
     if (!ko || btn.querySelector('.geo-orig')) return;
     btn.querySelector('b').textContent = ko.name;
     if (ko.area) btn.querySelector('.geo-addr').textContent = ko.area;
