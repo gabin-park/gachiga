@@ -11,3 +11,8 @@ binding = "AI"
 # 요청 결과 기록(무료 요금제 포함). 대시보드 > Workers > gachiga-ig > Logs에서 볼 수 있어요.
 [observability]
 enabled = true
+
+# 한국어로 옮긴 낱말(渋谷区 → 시부야구)을 모두가 같이 쓰도록 모아 두는 곳(무료 요금제 KV).
+[[kv_namespaces]]
+binding = "KO_WORDS"
+id = "c8645352310f4373a8222dc223f510f3"

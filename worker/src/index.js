@@ -48,8 +48,13 @@ export default {
     }
     if (params.get('tr')) {
       const q = params.get('tr').slice(0, 60), city = (params.get('trip') || '').slice(0, 40);
+      // 같은 여행지에서 같은 말로 찾은 적이 있으면(누구든) 저장해 둔 번역을 바로 줘요.
+      const kvKey = `tr:${city}|${q}`;
+      const saved = await env.KO_WORDS?.get(kvKey, 'json').catch(() => null);
+      if (saved) return reply(saved);
       const out = await localNames(env, q, city).catch(e => { console.log(JSON.stringify({ tr: q, error: String(e.message || e) })); return { names: [], city: '' }; });
       console.log(JSON.stringify({ tr: q, trip: city, ...out }));
+      if (out.names.length) await env.KO_WORDS?.put(kvKey, JSON.stringify(out)).catch(() => {});
       return reply(out);
     }
     if (params.get('gmaps')) {
@@ -113,18 +118,20 @@ export async function localNames(env, q, city) {
 // AI에게 주소 전체를 맡기면 동네·번지를 자주 빼먹어요. 그래서 AI는 낱말 번역만 하고,
 // 주소를 나누고 순서를 맞추고 번지 숫자를 붙이는 일은 여기서 코드로 해요.
 const KO_PROMPT = `너는 여행 앱 도우미야. 해외 지도에 나온 낱말(가게 이름, 브랜드, 구·동네·길 이름, 도시 이름)을 한국 사람이 읽을 수 있게 한국어로 옮겨.
-받은 낱말마다 { src, ko }를 하나씩 돌려줘. src는 받은 낱말 그대로.
+번호 붙은 낱말을 받으면, 같은 순서·같은 개수로 한국어만 ko 배열에 담아 돌려줘.
 - 브랜드는 한국 표기(スターバックス → 스타벅스, McDonald's → 맥도날드).
 - 고유 이름은 현지 발음을 한국어로(清水寺 → 기요미즈데라, 一蘭 → 이치란, 神宮前 → 진구마에, Rue de Rivoli → 리볼리 거리, Pike Street → 파이크 스트리트). 일본 한자는 일본어 발음으로 읽어.
-- 일본 행정 이름: 渋谷区 → 시부야구, 成田市 → 나리타시, 神宮前四丁目 → 진구마에 4초메, 宇田川町 → 우다가와초.
+- 일본 행정 이름: 渋谷区 → 시부야구, 成田市 → 나리타시, 神宮前四丁目 → 진구마에 4초메, 港区 → 미나토구, 中央区 → 주오구, 宇田川町 → 우다가와초, 新宿中央通り → 신주쿠 주오도리(通り는 도리). 한자·가나를 남기지 마.
 - 프랑스 구: 1er Arrondissement → 1구.
 - 이미 한국어거나 쉬운 영어면 그대로. 지어내거나 빼지 말고 받은 낱말만 옮겨.`;
 const KO_SCHEMA = {
   type: 'object',
-  properties: { items: { type: 'array', items: { type: 'object', properties: { src: { type: 'string' }, ko: { type: 'string' } }, required: ['src', 'ko'] } } },
-  required: ['items'],
+  properties: { ko: { type: 'array', items: { type: 'string' } } },
+  required: ['ko'],
 };
 const POSTCODE = /^[A-Z]{0,2}\d{3}-?\d{4}$|^\d{4,6}(-\d{4})?$|^[A-Z]\d[A-Z] ?\d[A-Z]\d$/i;
+const CJK = /[\u3040-\u30ff\u4e00-\u9fff]/;
+const CLEAN = /^[가-힣a-zA-Z0-9\s.,'&·()\-]+$/;
 const NUMBER = /^\d[\d\s-]*[a-z]?$/i;
 // "3 4, 神宮前四丁目, 渋谷区, 東京都, 日本" → 작은 곳부터 [번지, 동네, 구] (나라·주·우편번호·가게 이름은 빼요)
 function addressParts(name, address) {
@@ -141,18 +148,45 @@ function addressParts(name, address) {
 export async function koreanLabels(env, rows) {
   const split = rows.map(([name, address = '']) => ({ name, parts: addressParts(name, address) }));
   const words = [...new Set(split.flatMap(r => [r.name, ...r.parts.map(p => p.word)]).filter(w => w && /\p{L}/u.test(w) && !/[가-힣]/.test(w)))].slice(0, 40);
-  const out = words.length ? await env.AI.run(MODEL, {
-    messages: [
-      { role: 'system', content: KO_PROMPT },
-      { role: 'user', content: words.join('\n') },
-    ],
-    response_format: { type: 'json_schema', json_schema: KO_SCHEMA },
-    max_tokens: 900,
-    temperature: 0,
-  }) : null;
-  let data = out?.response;
-  if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
-  const ko = new Map((Array.isArray(data?.items) ? data.items : []).map(i => [String(i?.src || '').trim(), String(i?.ko || '').trim().slice(0, 40)]));
+  // 누가 한 번 옮긴 낱말은 KV에 모아 두고 다음부터 AI 없이 바로 써요.
+  const kvKey = w => `ko4:${w}`.slice(0, 480); // ko4: 번호·한자·이상한 글자·영어가 섞인 예전 답은 버려요
+  const saved = env.KO_WORDS ? await Promise.all(words.map(w => env.KO_WORDS.get(kvKey(w)).catch(() => null))) : [];
+  const ko = new Map(words.map((w, i) => [w, saved[i]]).filter(([, v]) => v));
+  const todo = words.filter(w => !ko.has(w));
+  // 낱말이 많으면 4개씩 나눠 동시에 물어봐요. 한 번에 길게 쓰게 하면 그만큼 오래 걸려요.
+  const ask = (list, temperature) => {
+    const groups = [];
+    for (let i = 0; i < list.length; i += 4) groups.push(list.slice(i, i + 4));
+    return Promise.all(groups.map(group => askGroup(group, temperature)));
+  };
+  const askGroup = async (group, temperature) => {
+    const out = await env.AI.run(MODEL, {
+      messages: [
+        { role: 'system', content: KO_PROMPT },
+        { role: 'user', content: group.map((w, i) => `${i + 1}. ${w}`).join('\n') },
+      ],
+      response_format: { type: 'json_schema', json_schema: KO_SCHEMA },
+      max_tokens: 200,
+      temperature,
+    }).catch(() => null);
+    let data = out?.response;
+    if (typeof data === 'string') { try { data = JSON.parse(data.match(/\{[\s\S]*\}/)?.[0] || data); } catch { data = {}; } }
+    // AI가 가끔 붙이는 "1. " 번호는 떼요.
+    const got = Array.isArray(data?.ko) ? data.ko.map(v => String(v || '').replace(/^\s*\d+[.)]\s*/, '').trim().slice(0, 40)) : [];
+    // 개수가 안 맞으면 어느 게 어느 건지 몰라서 버려요(원래 글자로 보여줘요).
+    if (got.length !== group.length) return;
+    await Promise.all(group.map((w, i) => {
+      // 한글·영문·숫자로만 된 답만 써요. 한자·가나가 남거나(중앙通り) 엉뚱한 글자가 섞이면(민ато구)
+      // 원래 글자로 두고 저장하지 않아요. 다음에 다시 물어봐요.
+      if (!CLEAN.test(got[i]) || (CJK.test(w) && /[a-z]/i.test(got[i]))) return null; // 일본어를 영어로 바꾼 답(銀座 → ginza)도 버려요
+      ko.set(w, got[i]);
+      return env.KO_WORDS?.put(kvKey(w), got[i]).catch(() => {});
+    }));
+  };
+  await ask(todo, 0);
+  // 걸러진 낱말은 한 번만 다시 물어봐요(같은 답이 나오지 않게 조금 다르게).
+  const miss = todo.filter(w => !ko.has(w));
+  if (miss.length) await ask(miss, 0.4);
   const say = w => ko.get(w) || w; // 못 옮긴 낱말은 원래 글자 그대로 둬요
   return split.map(r => ({
     name: ko.get(r.name) || '',
